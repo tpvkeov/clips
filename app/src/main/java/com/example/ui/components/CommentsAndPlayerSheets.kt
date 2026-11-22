@@ -3,10 +3,14 @@ package com.example.ui.components
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,12 +47,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
@@ -68,12 +75,15 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -92,6 +102,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -111,146 +123,403 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.model.AvatarPreset
 import com.example.model.CommentItem
 import com.example.model.VideoItem
+import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
+
+private enum class CommentsSheetMode {
+    READ_LIST,
+    ADD_COMMENT
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommentsBottomSheet(
     comments: List<CommentItem>,
+    startInAddMode: Boolean = false,
     getAvatarPreset: (String) -> AvatarPreset,
     onAddComment: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var mode by remember(startInAddMode) {
+        mutableStateOf(
+            if (startInAddMode) CommentsSheetMode.ADD_COMMENT
+            else CommentsSheetMode.READ_LIST
+        )
+    }
     var inputText by remember { mutableStateOf("") }
+    val accent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 20.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "التعليقات (${comments.size})",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
+        AnimatedContent(
+            targetState = mode,
+            transitionSpec = {
+                if (targetState == CommentsSheetMode.ADD_COMMENT) {
+                    (fadeIn(tween(200)) + slideInHorizontally { -it / 4 }) togetherWith
+                        (fadeOut(tween(150)) + slideOutHorizontally { it / 4 })
+                } else {
+                    (fadeIn(tween(200)) + slideInHorizontally { it / 4 }) togetherWith
+                        (fadeOut(tween(150)) + slideOutHorizontally { -it / 4 })
                 }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-            Spacer(modifier = Modifier.height(10.dp))
-
-            if (comments.isEmpty()) {
-                Box(
+            },
+            label = "comments_sheet_mode_transition"
+        ) { currentMode ->
+            if (currentMode == CommentsSheetMode.READ_LIST) {
+                // Dedicated Comments Reading List Mode (no inline input field)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp),
-                    contentAlignment = Alignment.Center
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 18.dp)
+                        .testTag("comments_read_list_view")
                 ) {
-                    Text(
-                        text = "كن أول من يترك تعليقاً جميلاً!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(comments, key = { it.id }) { comment ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.Top
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            HighQualityAvatarView(
-                                preset = getAvatarPreset(comment.avatarPresetId),
-                                size = 38.dp
+                            Icon(
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            Text(
+                                text = "التعليقات (${comments.size})",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = accent.copy(alpha = 0.14f)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = comment.authorName,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = comment.timeAgo,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    text = "قائمة القراءة",
+                                    color = accent,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (comments.isEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ChatBubbleOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "لا توجد تعليقات حتى الآن",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = comment.text,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = "كن أول من يضيف رأيه في قائمة التعليقات!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 180.dp, max = 420.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(comments, key = { it.id }) { comment ->
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+                                    border = BorderStroke(
+                                        0.6.dp,
+                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        HighQualityAvatarView(
+                                            preset = getAvatarPreset(comment.avatarPresetId),
+                                            size = 40.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = comment.authorName,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = comment.timeAgo,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = comment.text,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Distinct trigger button (NOT an open text input) to switch to Add Comment view
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = accent.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.38f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .testTag("open_add_comment_composer")
+                            .clickable { mode = CommentsSheetMode.ADD_COMMENT }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "اضغط لإضافة تعليق جديد…",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = accent
+                            ) {
+                                Text(
+                                    text = "إضافة تعليق",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                                 )
                             }
                         }
                     }
                 }
-            }
+            } else {
+                // Dedicated Add Comment Composer View
+                val focusRequester = remember { FocusRequester() }
+                val quickPhrases = remember {
+                    listOf(
+                        "محتوى رائع 👏",
+                        "تصوير احترافي 🎬",
+                        "استمر يا مبدع 🔥",
+                        "مفيد جداً ✨"
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("اكتب تعليقك هنا…") },
+                BackHandler {
+                    mode = CommentsSheetMode.READ_LIST
+                }
+
+                LaunchedEffect(Unit) {
+                    delay(140L)
+                    runCatching { focusRequester.requestFocus() }
+                }
+
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .testTag("comment_input_field"),
-                    shape = RoundedCornerShape(28.dp),
-                    singleLine = true
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("send_comment_button")
-                        .clickable {
-                            if (inputText.isNotBlank()) {
-                                onAddComment(inputText)
-                                inputText = ""
+                        .fillMaxWidth()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 20.dp)
+                        .testTag("comments_add_composer_view")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            IconButton(
+                                onClick = { mode = CommentsSheetMode.READ_LIST },
+                                modifier = Modifier.testTag("back_to_comments_list")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "العودة لقائمة التعليقات"
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "إضافة تعليق جديد",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "سيظهر تعليقك في قائمة التعليقات فور نشره",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "إرسال التعليق",
-                            tint = Color.White
-                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Quick suggestion chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        quickPhrases.forEach { phrase ->
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                                border = BorderStroke(
+                                    0.75.dp,
+                                    accent.copy(alpha = 0.30f)
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable {
+                                        inputText = if (inputText.isBlank()) phrase else "${inputText.trimEnd()} $phrase"
+                                    }
+                            ) {
+                                Text(
+                                    text = phrase,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = inputText,
+                        onValueChange = { inputText = it },
+                        placeholder = { Text("اكتب تعليقك بوضوح هنا…") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .testTag("comment_input_field"),
+                        shape = RoundedCornerShape(18.dp),
+                        minLines = 3,
+                        maxLines = 5
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { mode = CommentsSheetMode.READ_LIST },
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text("قراءة التعليقات")
+                        }
+
+                        Button(
+                            onClick = {
+                                if (inputText.isNotBlank()) {
+                                    onAddComment(inputText)
+                                    inputText = ""
+                                    mode = CommentsSheetMode.READ_LIST
+                                }
+                            },
+                            enabled = inputText.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accent,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("send_comment_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "نشر التعليق",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -269,6 +538,7 @@ fun HorizontalVideoPlayerSheet(
     onToggleSave: () -> Unit,
     onShare: () -> Unit,
     onOpenComments: () -> Unit,
+    onOpenAddComment: () -> Unit = onOpenComments,
     onAddComment: (String) -> Unit,
     onSelectSuggestedVideo: (String) -> Unit,
     onSelectSuggestedClip: (String) -> Unit,
@@ -370,10 +640,11 @@ fun HorizontalVideoPlayerSheet(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            val expandAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                border = BorderStroke(0.75.dp, Color(0xFFFF7A1A).copy(alpha = 0.45f)),
+                                border = BorderStroke(0.75.dp, expandAccent.copy(alpha = 0.45f)),
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
@@ -388,7 +659,7 @@ fun HorizontalVideoPlayerSheet(
                                     Icon(
                                         imageVector = Icons.Filled.OpenInFull,
                                         contentDescription = "تكبير الصفحة كاملة",
-                                        tint = Color(0xFFFF7A1A),
+                                        tint = expandAccent,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -567,10 +838,10 @@ fun HorizontalVideoPlayerSheet(
                         ) {
                             ClipsBrandIcon(size = 26.dp)
                             Text(
-                                text = video.category,
+                                text = "مشغل الفيديو",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10B981)
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
 
@@ -660,11 +931,11 @@ fun HorizontalVideoPlayerSheet(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 1. Inline Comments Section at the bottom of the expanded watch page
+                    // 1. Reading Comments Section + separate Add Comment trigger
                     ExpandedWatchCommentsSection(
                         comments = video.comments,
                         getAvatarPreset = getAvatarPreset,
-                        onAddComment = onAddComment,
+                        onOpenAddComment = onOpenAddComment,
                         onOpenAllComments = onOpenComments
                     )
 
@@ -808,23 +1079,25 @@ private fun VideoViewportBox(
     onOpenSettings: () -> Unit,
     onToggleMute: () -> Unit
 ) {
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
     val viewportShape = if (isPageExpanded) RoundedCornerShape(0.dp) else RoundedCornerShape(20.dp)
     val viewportModifier = if (isPageExpanded) {
         Modifier
             .fillMaxWidth()
-            .height(238.dp)
+            .aspectRatio(16f / 9f)
     } else {
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .height(210.dp)
+            .aspectRatio(16f / 9f)
             .clip(viewportShape)
             .border(
                 width = 1.25.dp,
                 brush = Brush.horizontalGradient(
                     listOf(
-                        Color(0xFFFF7A1A).copy(alpha = 0.55f),
-                        Color(0xFF10B981).copy(alpha = 0.55f)
+                        actionAccent.copy(alpha = 0.55f),
+                        secondaryAccent.copy(alpha = 0.55f)
                     )
                 ),
                 shape = viewportShape
@@ -892,7 +1165,7 @@ private fun VideoViewportBox(
             Surface(
                 shape = RoundedCornerShape(50),
                 color = Color(0xFF0E1722).copy(alpha = 0.85f),
-                border = BorderStroke(1.dp, Color(0xFFFF7A1A))
+                border = BorderStroke(1.dp, actionAccent)
             ) {
                 Text(
                     text = doubleTapHint.orEmpty(),
@@ -955,7 +1228,7 @@ private fun VideoViewportBox(
                         if (playbackSpeed != 1.0f) {
                             Surface(
                                 shape = RoundedCornerShape(50),
-                                color = Color(0xFFFF6D00).copy(alpha = 0.88f)
+                                color = actionAccent.copy(alpha = 0.88f)
                             ) {
                                 Text(
                                     text = "${playbackSpeed}x",
@@ -973,7 +1246,7 @@ private fun VideoViewportBox(
                         ) {
                             Text(
                                 text = selectedQuality,
-                                color = Color(0xFF34D399),
+                                color = secondaryAccent,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1000,8 +1273,8 @@ private fun VideoViewportBox(
                             .background(
                                 Brush.linearGradient(
                                     listOf(
-                                        Color(0xFFFF6D00).copy(alpha = 0.90f),
-                                        Color(0xFF10B981).copy(alpha = 0.90f)
+                                        actionAccent.copy(alpha = 0.90f),
+                                        secondaryAccent.copy(alpha = 0.90f)
                                     )
                                 )
                             )
@@ -1071,7 +1344,7 @@ private fun VideoViewportBox(
             }
         }
 
-        // When page is expanded and controls auto-hide during playback, keep a slim orange progress line inside bottom of video
+        // When page is expanded and controls auto-hide during playback, keep a slim progress line inside bottom of video
         if (isPageExpanded && !showControls) {
             Canvas(
                 modifier = Modifier
@@ -1084,7 +1357,7 @@ private fun VideoViewportBox(
                 val startX = if (isRtl) size.width - activeW else 0f
                 drawRect(
                     brush = Brush.horizontalGradient(
-                        listOf(Color(0xFFFF6D00), Color(0xFFFF9E40))
+                        listOf(actionAccent, actionAccent.copy(alpha = 0.72f))
                     ),
                     topLeft = Offset(startX, 0f),
                     size = Size(activeW, size.height)
@@ -1114,7 +1387,7 @@ private fun VideoDetailsAndActionsColumn(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo} • ${video.category}",
+            text = "${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -1171,13 +1444,42 @@ private fun VideoDetailsAndActionsColumn(
                 onClick = onOpenComments,
                 modifier = Modifier.weight(1f)
             )
-            PlayerActionChip(
-                icon = if (video.isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                label = if (video.isSaved) "محفوظ" else "حفظ",
-                active = video.isSaved,
-                onClick = onToggleSave,
-                modifier = Modifier.weight(1f)
-            )
+            val saveChipAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (video.isSaved) saveChipAccent.copy(alpha = 0.18f)
+                else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .testTag("player_save_chip_${video.id}")
+                    .clickable(onClick = onToggleSave)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 6.dp)
+                ) {
+                    CircularSaveWaterButton(
+                        itemKey = "player_${video.id}",
+                        isSaved = video.isSaved,
+                        onClick = onToggleSave,
+                        buttonSize = 30.dp,
+                        iconSize = 15.dp,
+                        containerColor = Color.Transparent,
+                        unsavedIconTint = MaterialTheme.colorScheme.onSurface,
+                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                        showFloatingStatusPill = true
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (video.isSaved) "محفوظ" else "حفظ",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (video.isSaved) saveChipAccent else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
             PlayerActionChip(
                 icon = Icons.Filled.Share,
                 label = "مشاركة",
@@ -1193,11 +1495,11 @@ private fun VideoDetailsAndActionsColumn(
 private fun ExpandedWatchCommentsSection(
     comments: List<CommentItem>,
     getAvatarPreset: (String) -> AvatarPreset,
-    onAddComment: (String) -> Unit,
+    onOpenAddComment: () -> Unit,
     onOpenAllComments: () -> Unit
 ) {
-    var commentDraft by remember { mutableStateOf("") }
     val isDark = MaterialTheme.colorScheme.background.red < 0.25f
+    val commentAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier
@@ -1217,10 +1519,10 @@ private fun ExpandedWatchCommentsSection(
                 color = if (isDark) Color.White else MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "عرض الكل",
+                text = "قراءة الكل",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFFF7A1A),
+                color = commentAccent,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onOpenAllComments)
@@ -1230,56 +1532,17 @@ private fun ExpandedWatchCommentsSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Quick inline comment input
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = commentDraft,
-                onValueChange = { commentDraft = it },
-                placeholder = { Text("أضف تعليقاً...") },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("expanded_inline_comment_input"),
-                shape = RoundedCornerShape(26.dp),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                shape = CircleShape,
-                color = Color(0xFFFF7A1A),
-                modifier = Modifier
-                    .size(46.dp)
-                    .testTag("expanded_inline_send_comment")
-                    .clickable {
-                        if (commentDraft.isNotBlank()) {
-                            onAddComment(commentDraft)
-                            commentDraft = ""
-                        }
-                    }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "إرسال التعليق",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
+        // Reading-only preview list (tapping opens full Reading List)
         if (comments.isEmpty()) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenAllComments)
             ) {
                 Text(
-                    text = "لا توجد تعليقات حتى الآن، كن أول من يشارك رأيه!",
+                    text = "لا توجد تعليقات حتى الآن، اضغط لفتح التعليقات.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(14.dp)
@@ -1293,6 +1556,7 @@ private fun ExpandedWatchCommentsSection(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .clickable(onClick = onOpenAllComments)
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.Top
                     ) {
@@ -1325,6 +1589,53 @@ private fun ExpandedWatchCommentsSection(
                         }
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Separate distinct button to open Add Comment Composer (different UI from reading list)
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = commentAccent.copy(alpha = 0.12f),
+            border = BorderStroke(0.9.dp, commentAccent.copy(alpha = 0.35f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .testTag("expanded_open_add_comment_button")
+                .clickable(onClick = onOpenAddComment)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = null,
+                        tint = commentAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "اضغط لإضافة تعليق…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = "كتابة",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = commentAccent
+                )
             }
         }
     }
@@ -1365,7 +1676,7 @@ private fun ExpandedSuggestedFeedSection(
                 text = "${suggestedVideos.size} فيديو",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF10B981)
+                color = MaterialTheme.colorScheme.secondary
             )
         }
 
@@ -1451,12 +1762,13 @@ private fun SuggestedHorizontalVideoRowCard(
                     mediaUriString = video.mediaUriString,
                     modifier = Modifier.fillMaxSize()
                 )
+                val playAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFFF6D00).copy(alpha = 0.86f)),
+                        .background(playAccent.copy(alpha = 0.88f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -1516,7 +1828,7 @@ private fun SuggestedHorizontalVideoRowCard(
                 Text(
                     text = "${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF10B981)
+                    color = MaterialTheme.colorScheme.secondary
                 )
             }
         }
@@ -1531,6 +1843,8 @@ private fun ExpandedSuggestedClipsShelf(
     val listState = rememberLazyListState()
     val snapFling = rememberSnapFlingBehavior(lazyListState = listState)
 
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
     Surface(
         shape = RoundedCornerShape(0.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -1538,8 +1852,8 @@ private fun ExpandedSuggestedClipsShelf(
             width = 0.75.dp,
             brush = Brush.horizontalGradient(
                 listOf(
-                    Color(0xFFFF7A1A).copy(alpha = 0.30f),
-                    Color(0xFF10B981).copy(alpha = 0.30f)
+                    actionAccent.copy(alpha = 0.30f),
+                    secondaryAccent.copy(alpha = 0.30f)
                 )
             )
         ),
@@ -1568,7 +1882,7 @@ private fun ExpandedSuggestedClipsShelf(
                     text = "مقاطع قصيرة",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFFF7A1A)
+                    color = actionAccent
                 )
             }
 
@@ -1590,8 +1904,8 @@ private fun ExpandedSuggestedClipsShelf(
                                 width = 1.dp,
                                 brush = Brush.verticalGradient(
                                     listOf(
-                                        Color(0xFFFF7A1A).copy(alpha = 0.45f),
-                                        Color(0xFF10B981).copy(alpha = 0.45f)
+                                        actionAccent.copy(alpha = 0.45f),
+                                        secondaryAccent.copy(alpha = 0.45f)
                                     )
                                 ),
                                 shape = RoundedCornerShape(16.dp)
@@ -1612,8 +1926,8 @@ private fun ExpandedSuggestedClipsShelf(
                                 .background(
                                     Brush.linearGradient(
                                         listOf(
-                                            Color(0xFFFF6D00).copy(alpha = 0.85f),
-                                            Color(0xFF10B981).copy(alpha = 0.85f)
+                                            actionAccent.copy(alpha = 0.85f),
+                                            secondaryAccent.copy(alpha = 0.85f)
                                         )
                                     )
                                 ),
@@ -1651,7 +1965,7 @@ private fun ExpandedSuggestedClipsShelf(
                                     Icon(
                                         imageVector = Icons.Filled.Visibility,
                                         contentDescription = null,
-                                        tint = Color(0xFF34D399),
+                                        tint = secondaryAccent,
                                         modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -1780,6 +2094,8 @@ private fun FullscreenVideoPlayerDialog(
                         }
                     }
 
+                    val fullAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+                    val fullSecondary = MaterialTheme.colorScheme.secondary
                     AnimatedVisibility(
                         visible = doubleTapHint != null,
                         enter = fadeIn(tween(150)),
@@ -1789,7 +2105,7 @@ private fun FullscreenVideoPlayerDialog(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color(0xFF0E1722).copy(alpha = 0.86f),
-                            border = BorderStroke(1.2.dp, Color(0xFFFF7A1A))
+                            border = BorderStroke(1.2.dp, fullAccent)
                         ) {
                             Text(
                                 text = doubleTapHint.orEmpty(),
@@ -1814,7 +2130,7 @@ private fun FullscreenVideoPlayerDialog(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color(0xFF0E1722).copy(alpha = 0.86f),
-                            border = BorderStroke(1.dp, Color(0xFFFF7A1A)),
+                            border = BorderStroke(1.dp, fullAccent),
                             modifier = Modifier.clickable(onClick = onToggleLock)
                         ) {
                             Row(
@@ -1824,7 +2140,7 @@ private fun FullscreenVideoPlayerDialog(
                                 Icon(
                                     imageVector = Icons.Filled.LockOpen,
                                     contentDescription = "فتح قفل الشاشة",
-                                    tint = Color(0xFFFF7A1A),
+                                    tint = fullAccent,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -1886,7 +2202,7 @@ private fun FullscreenVideoPlayerDialog(
                                         )
                                         Text(
                                             text = "$selectedQuality • ${playbackSpeed}x",
-                                            color = Color(0xFF34D399),
+                                            color = fullSecondary,
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -1935,8 +2251,8 @@ private fun FullscreenVideoPlayerDialog(
                                         .background(
                                             Brush.linearGradient(
                                                 listOf(
-                                                    Color(0xFFFF6D00).copy(alpha = 0.92f),
-                                                    Color(0xFF10B981).copy(alpha = 0.92f)
+                                                    fullAccent.copy(alpha = 0.92f),
+                                                    fullSecondary.copy(alpha = 0.92f)
                                                 )
                                             )
                                         )
@@ -1959,7 +2275,7 @@ private fun FullscreenVideoPlayerDialog(
                                 )
                             }
 
-                            // Bottom INSIDE-THE-VIDEO Orange Progress Bar & Quick Controls
+                            // Bottom INSIDE-THE-VIDEO Progress Bar & Quick Controls
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2020,7 +2336,7 @@ private fun FullscreenVideoPlayerDialog(
                                         ) {
                                             Text(
                                                 text = selectedQuality,
-                                                color = Color(0xFF34D399),
+                                                color = fullSecondary,
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -2071,12 +2387,13 @@ private fun PlayerOverlayPillButton(
     active: Boolean = false,
     buttonSize: androidx.compose.ui.unit.Dp = 38.dp
 ) {
+    val activeAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
     Box(
         modifier = modifier
             .size(buttonSize)
             .clip(CircleShape)
             .background(
-                if (active) Color(0xFFFF6D00).copy(alpha = 0.88f)
+                if (active) activeAccent.copy(alpha = 0.88f)
                 else Color(0xFF0E1722).copy(alpha = 0.72f)
             )
             .border(
@@ -2136,6 +2453,8 @@ private fun PlayerAdvancedSettingsOverlay(
                 .clickable(enabled = false, onClick = {})
                 .testTag("player_advanced_settings_panel")
         ) {
+            val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+            val secondaryAccent = MaterialTheme.colorScheme.secondary
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2151,7 +2470,7 @@ private fun PlayerAdvancedSettingsOverlay(
                         Icon(
                             imageVector = Icons.Filled.Settings,
                             contentDescription = null,
-                            tint = Color(0xFFFF7A1A),
+                            tint = actionAccent,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -2173,7 +2492,7 @@ private fun PlayerAdvancedSettingsOverlay(
                     Icon(
                         imageVector = Icons.Filled.HighQuality,
                         contentDescription = null,
-                        tint = Color(0xFF10B981),
+                        tint = secondaryAccent,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -2194,7 +2513,7 @@ private fun PlayerAdvancedSettingsOverlay(
                         val active = quality == selectedQuality
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = if (active) Color(0xFF10B981) else MaterialTheme.colorScheme.surfaceVariant,
+                            color = if (active) secondaryAccent else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .clickable { onSelectQuality(quality) }
@@ -2217,7 +2536,7 @@ private fun PlayerAdvancedSettingsOverlay(
                     Icon(
                         imageVector = Icons.Filled.Speed,
                         contentDescription = null,
-                        tint = Color(0xFFFF7A1A),
+                        tint = actionAccent,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -2238,7 +2557,7 @@ private fun PlayerAdvancedSettingsOverlay(
                         val active = speed == playbackSpeed
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = if (active) Color(0xFFFF7A1A) else MaterialTheme.colorScheme.surfaceVariant,
+                            color = if (active) actionAccent else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .clickable { onSelectSpeed(speed) }
@@ -2332,9 +2651,10 @@ private fun PlayerActionChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        color = if (active) actionAccent.copy(alpha = 0.18f)
         else MaterialTheme.colorScheme.surfaceVariant,
         modifier = modifier
             .height(44.dp)
@@ -2348,14 +2668,14 @@ private fun PlayerActionChip(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                tint = if (active) actionAccent else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                color = if (active) actionAccent else MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -2370,8 +2690,8 @@ private fun OrangeVideoProgressBar(
     modifier: Modifier = Modifier,
     inVideoOverlay: Boolean = false
 ) {
-    val orangePrimary = Color(0xFFFF6D00)
-    val orangeGlow = Color(0xFFFF9E40)
+    val orangePrimary = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val orangeGlow = orangePrimary.copy(alpha = 0.72f)
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val trackBackground = if (inVideoOverlay) {
         Color.White.copy(alpha = 0.28f)

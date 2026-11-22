@@ -86,10 +86,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AvatarPreset
 import com.example.model.VideoItem
+import com.example.ui.components.CircularSaveWaterButton
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.formatCompactCount
+import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -214,6 +216,8 @@ fun ClipsReelsScreen(
                 .align(Alignment.Center)
                 .testTag("clips_follow_confirmed_badge")
         ) {
+            val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+            val secondaryAccent = MaterialTheme.colorScheme.secondary
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = Color(0xFF0E1722).copy(alpha = 0.92f),
@@ -221,7 +225,7 @@ fun ClipsReelsScreen(
                 border = BorderStroke(
                     width = 1.25.dp,
                     brush = Brush.linearGradient(
-                        listOf(Color(0xFF10B981), Color(0xFFFF7A1A))
+                        listOf(secondaryAccent, actionAccent)
                     )
                 )
             ) {
@@ -236,7 +240,7 @@ fun ClipsReelsScreen(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF10B981), Color(0xFF34D399))
+                                    listOf(secondaryAccent, actionAccent)
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -329,6 +333,8 @@ private fun ReelPageItem(
         }
     }
 
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
     val likeScale by animateFloatAsState(
         targetValue = if (clip.isLiked) 1.12f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -408,7 +414,7 @@ private fun ReelPageItem(
             Icon(
                 imageVector = Icons.Filled.Favorite,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = actionAccent,
                 modifier = Modifier.size(108.dp)
             )
         }
@@ -446,14 +452,14 @@ private fun ReelPageItem(
                                 HighQualityAvatarView(
                                     preset = creatorAvatar,
                                     size = 48.dp,
-                                    borderColor = MaterialTheme.colorScheme.primary
+                                    borderColor = actionAccent
                                 )
                             }
 
                             ReelActionButton(
                                 icon = if (clip.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                                 countText = formatCompactCount(clip.likesCount),
-                                tint = if (clip.isLiked) MaterialTheme.colorScheme.primary else Color.White,
+                                tint = if (clip.isLiked) actionAccent else Color.White,
                                 contentDesc = "إعجاب",
                                 onClick = {
                                     onToggleLike()
@@ -477,14 +483,29 @@ private fun ReelPageItem(
                                 modifier = Modifier.testTag("clip_comment_${clip.id}")
                             )
 
-                            ReelActionButton(
-                                icon = if (clip.isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                                countText = if (clip.isSaved) "محفوظ" else "حفظ",
-                                tint = if (clip.isSaved) MaterialTheme.colorScheme.primary else Color.White,
-                                contentDesc = "حفظ",
-                                onClick = onToggleSave,
-                                modifier = Modifier.testTag("clip_save_${clip.id}")
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                CircularSaveWaterButton(
+                                    itemKey = "reel_${clip.id}",
+                                    isSaved = clip.isSaved,
+                                    onClick = onToggleSave,
+                                    buttonSize = 48.dp,
+                                    iconSize = 24.dp,
+                                    containerColor = Color.Black.copy(alpha = 0.42f),
+                                    unsavedIconTint = Color.White,
+                                    trackColor = Color.White.copy(alpha = 0.28f),
+                                    modifier = Modifier.testTag("clip_save_${clip.id}")
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (clip.isSaved) "محفوظ" else "حفظ",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
                             ReelActionButton(
                                 icon = Icons.Filled.Share,
@@ -546,7 +567,7 @@ private fun ReelPageItem(
                     // Playback timeline bar positioned cleanly right above the bottom navigation bar
                     LinearProgressIndicator(
                         progress = { progress },
-                        color = MaterialTheme.colorScheme.primary,
+                        color = actionAccent,
                         trackColor = Color.White.copy(alpha = 0.22f),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -666,13 +687,13 @@ private fun ReelPageItem(
                                     Surface(
                                         shape = RoundedCornerShape(50),
                                         color = if (isFollowing) {
-                                            Color(0xFF10B981).copy(alpha = 0.85f)
+                                            secondaryAccent.copy(alpha = 0.85f)
                                         } else {
                                             Color.Black.copy(alpha = 0.48f)
                                         },
                                         border = BorderStroke(
                                             1.dp,
-                                            if (isFollowing) Color(0xFF34D399) else Color.White.copy(alpha = 0.20f)
+                                            if (isFollowing) secondaryAccent else Color.White.copy(alpha = 0.20f)
                                         ),
                                         modifier = Modifier
                                             .minimumInteractiveComponentSize()
@@ -747,11 +768,15 @@ private fun ReelPageItem(
 
                                     Spacer(modifier = Modifier.weight(1f))
 
-                                    CompactCircleIconButton(
-                                        icon = if (clip.isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                                        tint = if (clip.isSaved) Color(0xFFFF9E44) else Color.White,
-                                        contentDesc = "حفظ",
+                                    CircularSaveWaterButton(
+                                        itemKey = "alt_reel_${clip.id}",
+                                        isSaved = clip.isSaved,
                                         onClick = onToggleSave,
+                                        buttonSize = 42.dp,
+                                        iconSize = 20.dp,
+                                        containerColor = Color.Black.copy(alpha = 0.45f),
+                                        unsavedIconTint = Color.White,
+                                        trackColor = Color.White.copy(alpha = 0.24f),
                                         modifier = Modifier.testTag("alt_clip_save_${clip.id}")
                                     )
 
@@ -857,7 +882,7 @@ private fun ReelPageItem(
                                     Icon(
                                         imageVector = Icons.Filled.PictureInPictureAlt,
                                         contentDescription = "تبديل وضع العرض الصافي",
-                                        tint = if (isCleanFocus) Color(0xFF10B981) else Color.White,
+                                        tint = if (isCleanFocus) secondaryAccent else Color.White,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }

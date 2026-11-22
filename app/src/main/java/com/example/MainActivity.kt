@@ -39,6 +39,7 @@ import com.example.ui.components.AddStoryBottomSheet
 import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.FloatingPillBottomBar
 import com.example.ui.components.HorizontalVideoPlayerSheet
+import com.example.ui.components.SaveLiquidAnimationOverlay
 import com.example.ui.components.StoryViewerOverlay
 import com.example.ui.screens.ClipsReelsScreen
 import com.example.ui.screens.CreatorProfileScreen
@@ -80,7 +81,8 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ClipsTheme(
             accentTheme = state.themeAccent,
-            darkTheme = state.isDarkMode
+            darkTheme = state.isDarkMode,
+            customButtonColors = state.buttonColors
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -167,6 +169,7 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                         MainTab.PROFILE -> ProfileScreen(
                             userProfile = state.userProfile,
                             currentAccent = state.themeAccent,
+                            customButtonColors = state.buttonColors,
                             isDarkMode = state.isDarkMode,
                             myHorizontalVideos = state.myHorizontalVideos,
                             myVerticalClips = state.myVerticalClips,
@@ -174,6 +177,8 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                             savedVideos = state.savedItems,
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onSelectAccent = viewModel::selectThemeAccent,
+                            onSetButtonColor = viewModel::setButtonCustomColor,
+                            onResetButtonColors = viewModel::resetCustomButtonColors,
                             onToggleDarkMode = viewModel::toggleDarkMode,
                             onOpenVideo = viewModel::openVideoPlayer,
                             onJumpToClipsTab = { viewModel.selectTab(MainTab.CLIPS) },
@@ -222,7 +227,10 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                         onToggleSave = { viewModel.toggleSaveVideo(activeVideo.id) },
                         onShare = { viewModel.shareVideo(activeVideo.id) },
                         onOpenComments = {
-                            viewModel.openComments(CommentsTarget.Video(activeVideo.id))
+                            viewModel.openComments(CommentsTarget.Video(activeVideo.id, startInAddMode = false))
+                        },
+                        onOpenAddComment = {
+                            viewModel.openComments(CommentsTarget.Video(activeVideo.id, startInAddMode = true))
                         },
                         onAddComment = { text ->
                             viewModel.addComment(CommentsTarget.Video(activeVideo.id), text)
@@ -255,6 +263,7 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                     }
                     CommentsBottomSheet(
                         comments = commentsList,
+                        startInAddMode = target.startInAddMode,
                         getAvatarPreset = viewModel::getAvatarPreset,
                         onAddComment = { text -> viewModel.addComment(target, text) },
                         onDismiss = viewModel::closeComments
@@ -289,6 +298,10 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(top = 8.dp, start = 16.dp, end = 16.dp)
+                )
+
+                SaveLiquidAnimationOverlay(
+                    event = state.saveFeedbackEvent
                 )
             }
             }

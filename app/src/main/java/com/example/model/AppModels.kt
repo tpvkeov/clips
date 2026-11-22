@@ -164,6 +164,15 @@ data class UserStoryGroup(
 )
 
 sealed class CommentsTarget {
-    data class Video(val videoId: String) : CommentsTarget()
-    data class Post(val postId: String) : CommentsTarget()
+    abstract val startInAddMode: Boolean
+
+    data class Video(
+        val videoId: String,
+        override val startInAddMode: Boolean = false
+    ) : CommentsTarget()
+
+    data class Post(
+        val postId: String,
+        override val startInAddMode: Boolean = false
+    ) : CommentsTarget()
 }

@@ -78,8 +78,10 @@ import androidx.compose.ui.unit.sp
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.MediaPlayer
 import android.net.Uri
 import android.widget.VideoView
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -97,6 +99,7 @@ import com.example.model.AvatarAccessory
 import com.example.model.AvatarPreset
 import com.example.model.MainTab
 import com.example.model.MediaVisualStyle
+import com.example.ui.theme.LocalCustomButtonColors
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -462,52 +465,66 @@ fun MediaSceneArtwork(
                         extractVideoFrameBitmap(context, mediaUriString)
                     }
                 }
-                if (frameBitmap != null) {
-                    Image(
-                        bitmap = frameBitmap!!.asImageBitmap(),
-                        contentDescription = "إطار الفيديو",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF0E1722))
-                    )
+                val naturalAspect by produceState<Float?>(initialValue = null, mediaUriString) {
+                    value = withContext(Dispatchers.IO) {
+                        extractVideoAspectRatio(context, mediaUriString)
+                    }
                 }
-                if (isPlaying) {
-                    key(mediaUriString) {
-                        var activePlayer by remember {
-                            mutableStateOf<android.media.MediaPlayer?>(null)
-                        }
-                        LaunchedEffect(isMuted, activePlayer) {
-                            runCatching {
-                                val vol = if (isMuted) 0f else 1f
-                                activePlayer?.setVolume(vol, vol)
-                            }
-                        }
-                        AndroidView(
-                            factory = { ctx ->
-                                VideoView(ctx).apply {
-                                    setVideoURI(Uri.parse(mediaUriString))
-                                    setOnPreparedListener { mp ->
-                                        activePlayer = mp
-                                        mp.isLooping = true
-                                        val vol = if (isMuted) 0f else 1f
-                                        runCatching { mp.setVolume(vol, vol) }
-                                        start()
-                                    }
-                                    setOnErrorListener { _, _, _ -> true }
-                                }
-                            },
-                            update = { videoView ->
-                                if (!videoView.isPlaying) {
-                                    runCatching { videoView.start() }
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF0A0F16)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (frameBitmap != null) {
+                        Image(
+                            bitmap = frameBitmap!!.asImageBitmap(),
+                            contentDescription = "إطار الفيديو",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
                         )
+                    }
+                    if (isPlaying) {
+                        key(mediaUriString) {
+                            var activePlayer by remember {
+                                mutableStateOf<MediaPlayer?>(null)
+                            }
+                            LaunchedEffect(isMuted, activePlayer) {
+                                runCatching {
+                                    val vol = if (isMuted) 0f else 1f
+                                    activePlayer?.setVolume(vol, vol)
+                                }
+                            }
+                            val videoViewModifier = if (naturalAspect != null && naturalAspect!! > 0f) {
+                                Modifier.aspectRatio(naturalAspect!!)
+                            } else {
+                                Modifier.fillMaxSize()
+                            }
+                            AndroidView(
+                                factory = { ctx ->
+                                    VideoView(ctx).apply {
+                                        setVideoURI(Uri.parse(mediaUriString))
+                                        setOnPreparedListener { mp ->
+                                            activePlayer = mp
+                                            mp.isLooping = true
+                                            runCatching {
+                                                mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                                            }
+                                            val vol = if (isMuted) 0f else 1f
+                                            runCatching { mp.setVolume(vol, vol) }
+                                            start()
+                                        }
+                                        setOnErrorListener { _, _, _ -> true }
+                                    }
+                                },
+                                update = { videoView ->
+                                    if (!videoView.isPlaying) {
+                                        runCatching { videoView.start() }
+                                    }
+                                },
+                                modifier = videoViewModifier
+                            )
+                        }
                     }
                 }
             } else {
@@ -848,8 +865,13 @@ fun FloatingPillBottomBar(
     onSelectTab: (MainTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val orangeAccent = Color(0xFFFF7A1A)
-    val greenAccent = Color(0xFF10B981)
+    val customButtonColors = LocalCustomButtonColors.current
+    val primaryAccent = MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
+    val uploadBrush = customButtonColors.uploadButtonColor?.let { customColor ->
+        Brush.linearGradient(listOf(customColor, customColor.copy(alpha = 0.85f)))
+    } ?: Brush.linearGradient(listOf(primaryAccent, secondaryAccent))
+
     val isDark = MaterialTheme.colorScheme.background.red < 0.25f
     val glassBg = if (isDark) {
         Color(0xFF101720).copy(alpha = 0.98f)
@@ -883,7 +905,7 @@ fun FloatingPillBottomBar(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Subtle Orange-to-Green accent hairline at the top edge
+                    // Subtle theme-synced hairline at the top edge
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -891,9 +913,9 @@ fun FloatingPillBottomBar(
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(
-                                        orangeAccent.copy(alpha = 0.55f),
-                                        greenAccent.copy(alpha = 0.55f),
-                                        orangeAccent.copy(alpha = 0.55f)
+                                        (customButtonColors.homeTabColor ?: primaryAccent).copy(alpha = 0.58f),
+                                        (customButtonColors.uploadButtonColor ?: secondaryAccent).copy(alpha = 0.58f),
+                                        (customButtonColors.profileTabColor ?: primaryAccent).copy(alpha = 0.58f)
                                     )
                                 )
                             )
@@ -928,14 +950,10 @@ fun FloatingPillBottomBar(
                                         .scale(itemScale)
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(orangeAccent, greenAccent)
-                                            )
-                                        )
+                                        .background(uploadBrush)
                                         .border(
                                             width = if (selected) 1.8.dp else 0.8.dp,
-                                            color = Color.White.copy(alpha = if (selected) 0.8f else 0.35f),
+                                            color = Color.White.copy(alpha = if (selected) 0.85f else 0.38f),
                                             shape = CircleShape
                                         )
                                         .clickable { onSelectTab(tab) },
@@ -957,8 +975,15 @@ fun FloatingPillBottomBar(
                                 MainTab.PROFILE -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
                                 MainTab.UPLOAD -> Icons.Filled.ArrowUpward
                             }
-                            // Alternate harmonious Orange & Green active highlights across tabs
-                            val activeAccent = if (index % 2 == 0) orangeAccent else greenAccent
+                            val tabOverride = when (tab) {
+                                MainTab.HOME -> customButtonColors.homeTabColor
+                                MainTab.CLIPS -> customButtonColors.clipsTabColor
+                                MainTab.POSTS -> customButtonColors.postsTabColor
+                                MainTab.PROFILE -> customButtonColors.profileTabColor
+                                MainTab.UPLOAD -> customButtonColors.uploadButtonColor
+                            }
+                            val defaultTabAccent = if (index % 2 == 0) primaryAccent else secondaryAccent
+                            val activeAccent = tabOverride ?: defaultTabAccent
                             val tintColor by animateColorAsState(
                                 targetValue = if (selected) activeAccent
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1003,11 +1028,7 @@ fun FloatingPillBottomBar(
                                         .width(indicatorWidth)
                                         .height(2.5.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(orangeAccent, greenAccent)
-                                            )
-                                        )
+                                        .background(activeAccent)
                                 )
                             }
                         }
@@ -1088,6 +1109,22 @@ private fun extractVideoFrameBitmap(context: Context, uriString: String): Bitmap
         val bmp = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
         retriever.release()
         bmp
+    }.getOrNull()
+}
+
+private fun extractVideoAspectRatio(context: Context, uriString: String): Float? {
+    return runCatching {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(context, Uri.parse(uriString))
+        val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+        val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+        val rot = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+        retriever.release()
+        val effectiveW = if (rot == 90 || rot == 270) h else w
+        val effectiveH = if (rot == 90 || rot == 270) w else h
+        if (effectiveW > 0 && effectiveH > 0) {
+            (effectiveW.toFloat() / effectiveH.toFloat()).coerceIn(0.4f, 2.5f)
+        } else null
     }.getOrNull()
 }
 

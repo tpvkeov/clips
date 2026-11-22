@@ -93,7 +93,7 @@ dependencies {
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.video)
   implementation(libs.androidx.camera.view)
-  implementation(libs.mlkit.face.mesh.detection)
+  // implementation(libs.mlkit.face.mesh.detection)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)

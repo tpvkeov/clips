@@ -88,11 +88,15 @@ import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.formatCompactCount
 import com.example.ui.theme.AppThemeAccent
+import com.example.ui.theme.ButtonColorTarget
+import com.example.ui.theme.ButtonSwatchPalette
+import com.example.ui.theme.CustomButtonColors
 
 @Composable
 fun ProfileScreen(
     userProfile: UserProfile,
     currentAccent: AppThemeAccent,
+    customButtonColors: CustomButtonColors,
     isDarkMode: Boolean,
     myHorizontalVideos: List<VideoItem>,
     myVerticalClips: List<VideoItem>,
@@ -100,6 +104,8 @@ fun ProfileScreen(
     savedVideos: List<VideoItem>,
     getAvatarPreset: (String) -> AvatarPreset,
     onSelectAccent: (AppThemeAccent) -> Unit,
+    onSetButtonColor: (ButtonColorTarget, Color?) -> Unit,
+    onResetButtonColors: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onJumpToClipsTab: () -> Unit,
@@ -109,6 +115,8 @@ fun ProfileScreen(
 ) {
     var selectedSectionTab by remember { mutableIntStateOf(0) }
     var showEditSheet by remember { mutableStateOf(false) }
+    var showPerButtonCustomizer by remember { mutableStateOf(false) }
+    var selectedColorTarget by remember { mutableStateOf(ButtonColorTarget.UPLOAD_BUTTON) }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -398,6 +406,205 @@ fun ProfileScreen(
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (selected) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Toggle row for customizing each button's individual color
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .testTag("toggle_per_button_colors")
+                            .clickable { showPerButtonCustomizer = !showPerButtonCustomizer }
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "تخصيص لون كل زر",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "حدّد لوناً مستقلاً للشريط وعلامة الرفع والأزرار",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (showPerButtonCustomizer || customButtonColors.hasAnyCustomColor()) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        ) {
+                            Text(
+                                text = if (showPerButtonCustomizer) "إخفاء" else "تخصيص",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (showPerButtonCustomizer || customButtonColors.hasAnyCustomColor()) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+
+                    if (showPerButtonCustomizer) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // 1. Target button selector chips
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(ButtonColorTarget.entries) { target ->
+                                val isTargetSelected = target == selectedColorTarget
+                                val resolvedDotColor = customButtonColors.colorFor(target)
+                                    ?: if (target == ButtonColorTarget.CLIPS_TAB || target == ButtonColorTarget.PROFILE_TAB) {
+                                        MaterialTheme.colorScheme.secondary
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = if (isTargetSelected) {
+                                        resolvedDotColor.copy(alpha = 0.18f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
+                                    },
+                                    border = BorderStroke(
+                                        width = if (isTargetSelected) 1.25.dp else 0.5.dp,
+                                        color = if (isTargetSelected) resolvedDotColor
+                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                                    ),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .testTag("button_target_${target.id}")
+                                        .clickable { selectedColorTarget = target }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .clip(CircleShape)
+                                                .background(resolvedDotColor)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = target.labelAr,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (isTargetSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isTargetSelected) MaterialTheme.colorScheme.onSurface
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 2. Color swatches for selected button target + Auto + Reset all
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            item {
+                                val isAuto = customButtonColors.colorFor(selectedColorTarget) == null
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = if (isAuto) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    border = if (isAuto) {
+                                        BorderStroke(1.25.dp, MaterialTheme.colorScheme.primary)
+                                    } else null,
+                                    modifier = Modifier
+                                        .height(36.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .clickable { onSetButtonColor(selectedColorTarget, null) }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = "افتراضي",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isAuto) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                            items(ButtonSwatchPalette) { (colorLabel, swatchColor) ->
+                                val isPicked = customButtonColors.colorFor(selectedColorTarget) == swatchColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(swatchColor)
+                                        .then(
+                                            if (isPicked) {
+                                                Modifier.border(
+                                                    width = 2.5.dp,
+                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    shape = CircleShape
+                                                )
+                                            } else Modifier
+                                        )
+                                        .testTag("button_swatch_${colorLabel}")
+                                        .clickable { onSetButtonColor(selectedColorTarget, swatchColor) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isPicked) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = colorLabel,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (customButtonColors.hasAnyCustomColor()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Text(
+                                    text = "إعادة تعيين كل الأزرار",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onResetButtonColors() }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }

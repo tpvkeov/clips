@@ -77,6 +77,7 @@ import com.example.model.AvatarPreset
 import com.example.model.MediaVisualStyle
 import com.example.model.UserProfile
 import com.example.model.UserStoryGroup
+import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
 
 @Composable
@@ -180,6 +181,9 @@ private fun OwnStoryCircleItem(
     onClickAvatar: () -> Unit,
     onClickAddBadge: () -> Unit
 ) {
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -194,7 +198,7 @@ private fun OwnStoryCircleItem(
                 Modifier.border(
                     width = 2.5.dp,
                     brush = Brush.linearGradient(
-                        listOf(Color(0xFFFF6D00), Color(0xFFFFB300), Color(0xFF10B981))
+                        listOf(actionAccent, MaterialTheme.colorScheme.tertiary, secondaryAccent)
                     ),
                     shape = CircleShape
                 )
@@ -236,7 +240,7 @@ private fun OwnStoryCircleItem(
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xFFFF6D00), Color(0xFF10B981))
+                            listOf(actionAccent, secondaryAccent)
                         )
                     )
                     .testTag("own_story_add_badge")
@@ -270,6 +274,9 @@ private fun CreatorStoryCircleItem(
     avatar: AvatarPreset,
     onClick: () -> Unit
 ) {
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -288,9 +295,9 @@ private fun CreatorStoryCircleItem(
                     width = 2.5.dp,
                     brush = Brush.linearGradient(
                         listOf(
-                            Color(0xFFFF6D00),
-                            Color(0xFFFFB300),
-                            Color(0xFF10B981)
+                            actionAccent,
+                            MaterialTheme.colorScheme.tertiary,
+                            secondaryAccent
                         )
                     ),
                     shape = CircleShape
@@ -325,7 +332,7 @@ private fun CreatorStoryCircleItem(
                         .clip(RoundedCornerShape(50))
                         .background(
                             if (storyGroup.isViewed) MaterialTheme.colorScheme.surfaceVariant
-                            else Color(0xFF10B981)
+                            else secondaryAccent
                         )
                         .padding(horizontal = 5.dp, vertical = 1.dp)
                 ) {
@@ -504,6 +511,7 @@ fun StoryViewerOverlay(
                 .statusBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
+            val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -516,7 +524,7 @@ fun StoryViewerOverlay(
                     }
                     LinearProgressIndicator(
                         progress = { segProgress },
-                        color = Color(0xFFFF7A1A),
+                        color = actionAccent,
                         trackColor = Color.White.copy(alpha = 0.30f),
                         modifier = Modifier
                             .weight(1f)
@@ -547,7 +555,7 @@ fun StoryViewerOverlay(
                     HighQualityAvatarView(
                         preset = getAvatarPreset(currentGroup.avatarPresetId),
                         size = 40.dp,
-                        borderColor = Color(0xFFFF7A1A)
+                        borderColor = actionAccent
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
@@ -678,6 +686,9 @@ fun AddStoryBottomSheet(
         MediaVisualStyle.GAMING_NEON to "نيون ألعاب"
     )
 
+    val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -704,7 +715,7 @@ fun AddStoryBottomSheet(
                     Text(
                         text = "تظهر في شريط القصص وتختفي تلقائياً بعد 24 ساعة",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF10B981)
+                        color = secondaryAccent
                     )
                 }
                 IconButton(onClick = onDismiss) {
@@ -721,7 +732,7 @@ fun AddStoryBottomSheet(
                     .clip(RoundedCornerShape(18.dp))
                     .border(
                         1.dp,
-                        Brush.horizontalGradient(listOf(Color(0xFFFF7A1A), Color(0xFF10B981))),
+                        Brush.horizontalGradient(listOf(actionAccent, secondaryAccent)),
                         RoundedCornerShape(18.dp)
                     )
             ) {
@@ -755,7 +766,7 @@ fun AddStoryBottomSheet(
                     val isSelected = selectedUri == null && selectedStyle == style
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = if (isSelected) Color(0xFFFF7A1A) else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isSelected) actionAccent else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
                             .clickable {
@@ -791,7 +802,7 @@ fun AddStoryBottomSheet(
 
             Button(
                 onClick = { onPublishStory(caption, selectedStyle, selectedUri) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7A1A)),
+                colors = ButtonDefaults.buttonColors(containerColor = actionAccent),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()

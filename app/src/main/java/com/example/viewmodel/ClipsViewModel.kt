@@ -15,17 +15,26 @@ import com.example.model.UserProfile
 import com.example.model.UserStoryGroup
 import com.example.model.VideoItem
 import com.example.model.VideoOrientation
+import androidx.compose.ui.graphics.Color
 import com.example.ui.theme.AppThemeAccent
+import com.example.ui.theme.ButtonColorTarget
+import com.example.ui.theme.CustomButtonColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.UUID
 
+data class SaveFeedbackEvent(
+    val id: Long,
+    val isSaving: Boolean
+)
+
 data class ClipsUiState(
     val currentTab: MainTab = MainTab.HOME,
     val isBottomBarVisible: Boolean = true,
     val themeAccent: AppThemeAccent = AppThemeAccent.ORANGE_GREEN,
+    val buttonColors: CustomButtonColors = CustomButtonColors(),
     val isDarkMode: Boolean = true,
     val searchQuery: String = "",
     val selectedCategory: String = "الكل",
@@ -42,7 +51,8 @@ data class ClipsUiState(
     val followedCreatorHandles: Set<String> = emptySet(),
     val commentsTarget: CommentsTarget? = null,
     val isClipsAltLayout: Boolean = false,
-    val feedbackMessage: String? = null
+    val feedbackMessage: String? = null,
+    val saveFeedbackEvent: SaveFeedbackEvent? = null
 ) {
     val activePlayerVideo: VideoItem?
         get() = activePlayerVideoId?.let { id ->
@@ -332,7 +342,25 @@ class ClipsViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 themeAccent = accent,
-                feedbackMessage = "تم تغيير لون التطبيق إلى ${accent.labelAr}"
+                buttonColors = CustomButtonColors(),
+                feedbackMessage = "تم تغيير لون التطبيق وجميع الأزرار إلى ${accent.labelAr}"
+            )
+        }
+    }
+
+    fun setButtonCustomColor(target: ButtonColorTarget, color: Color?) {
+        _uiState.update {
+            it.copy(
+                buttonColors = it.buttonColors.withColor(target, color)
+            )
+        }
+    }
+
+    fun resetCustomButtonColors() {
+        _uiState.update {
+            it.copy(
+                buttonColors = CustomButtonColors(),
+                feedbackMessage = "تمت إعادة جميع الأزرار إلى لون التطبيق الأساسي"
             )
         }
     }
@@ -407,10 +435,15 @@ class ClipsViewModel : ViewModel() {
                     clip.copy(isSaved = nowSaved)
                 } else clip
             }
+            val nextEventId = (state.saveFeedbackEvent?.id ?: 0L) + 1L
             state.copy(
                 horizontalVideos = updatedHorizontal,
                 verticalClips = updatedVertical,
-                feedbackMessage = if (nowSaved) "تم الحفظ في قائمة المحفوظات بحسابك" else "تمت الإزالة من المحفوظات"
+                saveFeedbackEvent = SaveFeedbackEvent(
+                    id = nextEventId,
+                    isSaving = nowSaved
+                ),
+                feedbackMessage = null
             )
         }
     }

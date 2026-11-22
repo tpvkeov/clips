@@ -8,6 +8,6 @@
     <string name="search_videos_hint">ابحث في الفيديوهات والقنوات…</string>
     <string name="create_post_prompt">أنشئ منشورك الآن…</string>
     <string name="publish_action">نشر الآن</string>
-    <string name="camera_permission_needed">نحتاج إذن الكاميرا لالتقاط صور وفيديوهات مع فلاتر الأفاتار</string>
+    <string name="camera_permission_needed">نحتاج إذن الكاميرا لالتقاط صور وفيديوهات احترافية</string>
     <string name="grant_camera_permission">تفعيل الكاميرا</string>
 </resources>

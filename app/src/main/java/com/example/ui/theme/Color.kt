@@ -3,6 +3,8 @@ package com.example.ui.theme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 enum class AppThemeAccent(
@@ -42,6 +44,64 @@ enum class AppThemeAccent(
         secondarySwatch = Color(0xFF10B981)
     )
 }
+
+enum class ButtonColorTarget(val id: String, val labelAr: String) {
+    HOME_TAB("home", "الرئيسية"),
+    CLIPS_TAB("clips", "clips"),
+    UPLOAD_BUTTON("upload", "علامة الرفع"),
+    POSTS_TAB("posts", "المنشورات"),
+    PROFILE_TAB("profile", "حسابي"),
+    ACTION_BUTTONS("actions", "أزرار التفاعل")
+}
+
+@Immutable
+data class CustomButtonColors(
+    val homeTabColor: Color? = null,
+    val clipsTabColor: Color? = null,
+    val uploadButtonColor: Color? = null,
+    val postsTabColor: Color? = null,
+    val profileTabColor: Color? = null,
+    val actionButtonsColor: Color? = null
+) {
+    fun colorFor(target: ButtonColorTarget): Color? = when (target) {
+        ButtonColorTarget.HOME_TAB -> homeTabColor
+        ButtonColorTarget.CLIPS_TAB -> clipsTabColor
+        ButtonColorTarget.UPLOAD_BUTTON -> uploadButtonColor
+        ButtonColorTarget.POSTS_TAB -> postsTabColor
+        ButtonColorTarget.PROFILE_TAB -> profileTabColor
+        ButtonColorTarget.ACTION_BUTTONS -> actionButtonsColor
+    }
+
+    fun withColor(target: ButtonColorTarget, color: Color?): CustomButtonColors = when (target) {
+        ButtonColorTarget.HOME_TAB -> copy(homeTabColor = color)
+        ButtonColorTarget.CLIPS_TAB -> copy(clipsTabColor = color)
+        ButtonColorTarget.UPLOAD_BUTTON -> copy(uploadButtonColor = color)
+        ButtonColorTarget.POSTS_TAB -> copy(postsTabColor = color)
+        ButtonColorTarget.PROFILE_TAB -> copy(profileTabColor = color)
+        ButtonColorTarget.ACTION_BUTTONS -> copy(actionButtonsColor = color)
+    }
+
+    fun hasAnyCustomColor(): Boolean =
+        homeTabColor != null ||
+            clipsTabColor != null ||
+            uploadButtonColor != null ||
+            postsTabColor != null ||
+            profileTabColor != null ||
+            actionButtonsColor != null
+}
+
+val LocalCustomButtonColors = compositionLocalOf { CustomButtonColors() }
+
+val ButtonSwatchPalette: List<Pair<String, Color>> = listOf(
+    "برتقالي" to Color(0xFFFF7A1A),
+    "أخضر" to Color(0xFF10B981),
+    "أزرق" to Color(0xFF3B82F6),
+    "بنفسجي" to Color(0xFFA855F7),
+    "قرمزي" to Color(0xFFFF3B5C),
+    "ذهبي" to Color(0xFFF59E0B),
+    "سماوي" to Color(0xFF06B6D4),
+    "وردي" to Color(0xFFEC4899)
+)
 
 private val DarkBackground = Color(0xFF0E131B)
 private val DarkSurface = Color(0xFF141A24)

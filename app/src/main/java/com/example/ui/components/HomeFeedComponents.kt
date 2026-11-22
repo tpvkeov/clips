@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.model.AvatarPreset
 import com.example.model.VideoItem
+import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -353,9 +354,9 @@ fun FeaturedClipsCarouselSection(
                                     .fillMaxSize()
                                     .graphicsLayer {
                                         val p = listState.itemPhysicalParallax(index, isRtl)
-                                        scaleX = 1.34f
-                                        scaleY = 1.22f
-                                        translationX = (-p * 32.dp.toPx()).coerceIn(-36.dp.toPx(), 36.dp.toPx())
+                                        scaleX = 1.06f
+                                        scaleY = 1.06f
+                                        translationX = (-p * 12.dp.toPx()).coerceIn(-16.dp.toPx(), 16.dp.toPx())
                                     }
                             )
 
@@ -443,7 +444,7 @@ fun FeaturedClipsCarouselSection(
                                         Icon(
                                             imageVector = Icons.Filled.Visibility,
                                             contentDescription = null,
-                                            tint = Color(0xFF34D399),
+                                            tint = MaterialTheme.colorScheme.secondary,
                                             modifier = Modifier.size(13.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -585,12 +586,14 @@ fun HorizontalVideosParallaxCarouselSection(
                                             .fillMaxSize()
                                             .graphicsLayer {
                                                 val p = listState.itemPhysicalParallax(index, isRtl)
-                                                scaleX = 1.34f
-                                                scaleY = 1.22f
-                                                translationX = (-p * 34.dp.toPx()).coerceIn(-40.dp.toPx(), 40.dp.toPx())
+                                                scaleX = 1.06f
+                                                scaleY = 1.06f
+                                                translationX = (-p * 12.dp.toPx()).coerceIn(-16.dp.toPx(), 16.dp.toPx())
                                             }
                                     )
 
+                                    val playAccent = LocalCustomButtonColors.current.actionButtonsColor
+                                        ?: MaterialTheme.colorScheme.primary
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.Center)
@@ -603,7 +606,7 @@ fun HorizontalVideosParallaxCarouselSection(
                                             .background(
                                                 Brush.linearGradient(
                                                     listOf(
-                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                                                        playAccent.copy(alpha = 0.88f),
                                                         MaterialTheme.colorScheme.secondary.copy(alpha = 0.88f)
                                                     )
                                                 )

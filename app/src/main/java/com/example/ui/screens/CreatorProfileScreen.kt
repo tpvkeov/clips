@@ -80,6 +80,7 @@ import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.formatCompactCount
+import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun CreatorProfileScreen(
@@ -115,6 +116,8 @@ fun CreatorProfileScreen(
         "المنشورات (${creatorPosts.size})"
     )
     val isDark = MaterialTheme.colorScheme.background.red < 0.25f
+    val primaryAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
 
     Surface(
         modifier = modifier
@@ -233,7 +236,7 @@ fun CreatorProfileScreen(
                             HighQualityAvatarView(
                                 preset = getAvatarPreset(creator.avatarPresetId),
                                 size = 94.dp,
-                                borderColor = Color(0xFFFF7A1A)
+                                borderColor = primaryAccent
                             )
                         }
 
@@ -262,7 +265,7 @@ fun CreatorProfileScreen(
                                     Text(
                                         text = creator.handle,
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = Color(0xFF10B981),
+                                        color = secondaryAccent,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -270,8 +273,8 @@ fun CreatorProfileScreen(
                                 Surface(
                                     shape = RoundedCornerShape(50),
                                     color = if (isFollowing) MaterialTheme.colorScheme.surfaceVariant
-                                    else Color(0xFFFF7A1A),
-                                    border = if (isFollowing) BorderStroke(1.dp, Color(0xFF10B981)) else null,
+                                    else primaryAccent,
+                                    border = if (isFollowing) BorderStroke(1.dp, secondaryAccent) else null,
                                     modifier = Modifier
                                         .heightIn(min = 40.dp)
                                         .testTag("creator_follow_button")
@@ -289,7 +292,7 @@ fun CreatorProfileScreen(
                                         Icon(
                                             imageVector = if (isFollowing) Icons.Filled.Check else Icons.Filled.PersonAdd,
                                             contentDescription = null,
-                                            tint = if (isFollowing) Color(0xFF10B981) else Color.White,
+                                            tint = if (isFollowing) secondaryAccent else Color.White,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
@@ -348,12 +351,12 @@ fun CreatorProfileScreen(
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = Color(0xFFFF7A1A),
+                    contentColor = primaryAccent,
                     indicator = { tabPositions ->
                         if (selectedTab < tabPositions.size) {
                             TabRowDefaults.SecondaryIndicator(
                                 modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                color = Color(0xFFFF7A1A)
+                                color = primaryAccent
                             )
                         }
                     }
@@ -443,14 +446,14 @@ fun CreatorProfileScreen(
                                         Text(
                                             text = post.timeAgo,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF10B981),
+                                            color = secondaryAccent,
                                             fontWeight = FontWeight.Bold
                                         )
                                         if (post.linkedVideoId != null) {
                                             Text(
                                                 text = "فيديو عريض • ${post.linkedVideoDuration.orEmpty()}",
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFFFF7A1A),
+                                                color = primaryAccent,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
@@ -511,7 +514,7 @@ fun CreatorProfileScreen(
                 border = BorderStroke(
                     width = 1.25.dp,
                     brush = Brush.linearGradient(
-                        listOf(Color(0xFF10B981), Color(0xFFFF7A1A))
+                        listOf(secondaryAccent, primaryAccent)
                     )
                 )
             ) {
@@ -526,7 +529,7 @@ fun CreatorProfileScreen(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF10B981), Color(0xFF34D399))
+                                    listOf(secondaryAccent, primaryAccent)
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -595,6 +598,8 @@ private fun CreatorHorizontalVideoCard(
                     mediaUriString = video.mediaUriString,
                     modifier = Modifier.fillMaxSize()
                 )
+                val playBtnColor = LocalCustomButtonColors.current.actionButtonsColor
+                    ?: MaterialTheme.colorScheme.primary
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -603,8 +608,8 @@ private fun CreatorHorizontalVideoCard(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFFFF6D00).copy(alpha = 0.86f),
-                                    Color(0xFF10B981).copy(alpha = 0.86f)
+                                    playBtnColor.copy(alpha = 0.86f),
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.86f)
                                 )
                             )
                         )
@@ -645,7 +650,7 @@ private fun CreatorHorizontalVideoCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo} • ${video.category}",
+                    text = "${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

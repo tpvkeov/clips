@@ -76,6 +76,7 @@ import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.cloudyLightHeader
 import com.example.ui.components.formatCompactCount
+import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun PostsScreen(
@@ -248,6 +249,7 @@ private fun CreatePostTopCard(
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
             Spacer(modifier = Modifier.height(10.dp))
+            val actionTint = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -255,14 +257,14 @@ private fun CreatePostTopCard(
                 ComposerShortcutButton(
                     icon = Icons.Filled.Image,
                     label = "صورة",
-                    tint = Color(0xFF10B981),
+                    tint = MaterialTheme.colorScheme.secondary,
                     onClick = onOpenPhotoComposer,
                     modifier = Modifier.weight(1f)
                 )
                 ComposerShortcutButton(
                     icon = Icons.Filled.Videocam,
                     label = "فيديو عريض",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = actionTint,
                     onClick = onOpenHorizontalVideoComposer,
                     modifier = Modifier.weight(1f)
                 )
@@ -704,6 +706,8 @@ private fun CreatePostBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            val publishBtnColor = LocalCustomButtonColors.current.actionButtonsColor
+                ?: MaterialTheme.colorScheme.primary
             Button(
                 onClick = {
                     val fallbackStyle = when {
@@ -715,7 +719,7 @@ private fun CreatePostBottomSheet(
                     onPublish(content, isHorizontalVideo, videoTitle, selectedUri, fallbackStyle)
                 },
                 enabled = content.isNotBlank() || attachDemoVisual || selectedUri != null,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = ButtonDefaults.buttonColors(containerColor = publishBtnColor),
                 shape = RoundedCornerShape(18.dp),
                 modifier = Modifier
                     .fillMaxWidth()

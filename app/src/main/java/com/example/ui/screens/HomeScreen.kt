@@ -76,6 +76,7 @@ import com.example.model.UserProfile
 import com.example.model.UserStoryGroup
 import com.example.model.VideoItem
 import com.example.ui.components.CinematicGlowingSearchBar
+import com.example.ui.components.CircularSaveWaterButton
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.FeaturedClipsCarouselSection
 import com.example.ui.components.HighQualityAvatarView
@@ -85,6 +86,7 @@ import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.cloudyLightHeader
 import com.example.ui.components.formatCompactCount
+import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun HomeScreen(
@@ -435,9 +437,9 @@ private fun HorizontalVideoCard(
                     .fillMaxSize()
                     .graphicsLayer {
                         val p = listState.itemVerticalParallax(itemKey)
-                        scaleX = 1.04f
-                        scaleY = 1.16f
-                        translationY = (-p * 12.dp.toPx()).coerceIn(-14.dp.toPx(), 14.dp.toPx())
+                        scaleX = 1.02f
+                        scaleY = 1.07f
+                        translationY = (-p * 8.dp.toPx()).coerceIn(-10.dp.toPx(), 10.dp.toPx())
                     }
             )
 
@@ -497,6 +499,8 @@ private fun HorizontalVideoCard(
             }
 
             // Center Play Pill
+            val actionAccent = LocalCustomButtonColors.current.actionButtonsColor
+                ?: MaterialTheme.colorScheme.primary
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -505,7 +509,7 @@ private fun HorizontalVideoCard(
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.88f),
+                                actionAccent.copy(alpha = 0.88f),
                                 MaterialTheme.colorScheme.secondary.copy(alpha = 0.88f)
                             )
                         )
@@ -518,23 +522,6 @@ private fun HorizontalVideoCard(
                     contentDescription = "تشغيل الفيديو",
                     tint = Color.White,
                     modifier = Modifier.size(28.dp)
-                )
-            }
-
-            // Category chip at BottomStart
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(10.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF0A1018).copy(alpha = 0.72f))
-                    .padding(horizontal = 9.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = video.category,
-                    color = Color.White.copy(alpha = 0.94f),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -606,29 +593,17 @@ private fun HorizontalVideoCard(
 
             Spacer(modifier = Modifier.width(4.dp))
 
-            IconButton(
+            CircularSaveWaterButton(
+                itemKey = "home_${video.id}",
+                isSaved = video.isSaved,
                 onClick = onToggleSave,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (video.isSaved) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                            else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (video.isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                        contentDescription = "حفظ الفيديو",
-                        tint = if (video.isSaved) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-            }
+                buttonSize = 40.dp,
+                iconSize = 19.dp,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                unsavedIconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                modifier = Modifier.testTag("home_save_${video.id}")
+            )
 
             IconButton(
                 onClick = onShare,
@@ -713,9 +688,11 @@ private fun HomeEmptyStateCard(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(18.dp))
+            val exploreButtonColor = LocalCustomButtonColors.current.actionButtonsColor
+                ?: MaterialTheme.colorScheme.primary
             Button(
                 onClick = if (isSearching) onClearSearch else onExploreClips,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = ButtonDefaults.buttonColors(containerColor = exploreButtonColor),
                 shape = RoundedCornerShape(50),
                 modifier = Modifier.height(48.dp)
             ) {

@@ -30,12 +30,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -64,13 +64,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.data.DemoDataFactory
-import com.example.model.AvatarPreset
 import com.example.model.MediaVisualStyle
 import com.example.model.UploadContentType
-import com.example.ui.camera.CameraAvatarVideoStudioDialog
+import com.example.ui.camera.ProCameraStudioDialog
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.MediaSceneArtwork
+import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun UploadStudioScreen(
@@ -87,20 +86,23 @@ fun UploadStudioScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val customButtonColors = LocalCustomButtonColors.current
+    val primaryAccent = customButtonColors.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val uploadButtonAccent = customButtonColors.uploadButtonColor ?: primaryAccent
+    val secondaryAccent = MaterialTheme.colorScheme.secondary
 
     var selectedType by remember { mutableStateOf(UploadContentType.HORIZONTAL_VIDEO) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var capturedOrPickedUri by remember { mutableStateOf<String?>(null) }
-    var selectedAvatarOverlay by remember { mutableStateOf<AvatarPreset?>(null) }
     var showCameraDialog by remember { mutableStateOf(false) }
 
-    val videoPicker = rememberLauncherForActivityResult(
+    val mediaPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             capturedOrPickedUri = uri.toString()
-            selectedType = detectVideoContentType(context, uri)
+            selectedType = detectMediaContentType(context, uri)
         }
     }
 
@@ -134,19 +136,19 @@ fun UploadStudioScreen(
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = "رفع فيديو",
+                    text = "استوديو الرفع",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "اختر فيديو أو صوّر فيديو بالكاميرا مع الأفاتار",
+                    text = "اختر فيديو أو صورة أو صوّر بالكاميرا الاحترافية",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        // Focused Video Picker + Camera Button Area
+        // Focused Media Picker + Pro Camera Button Area
         Surface(
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -154,8 +156,8 @@ fun UploadStudioScreen(
                 width = 1.dp,
                 brush = Brush.horizontalGradient(
                     listOf(
-                        Color(0xFFFF7A1A).copy(alpha = 0.45f),
-                        Color(0xFF10B981).copy(alpha = 0.45f)
+                        primaryAccent.copy(alpha = 0.45f),
+                        secondaryAccent.copy(alpha = 0.45f)
                     )
                 )
             ),
@@ -168,13 +170,15 @@ fun UploadStudioScreen(
                 modifier = Modifier.padding(14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (capturedOrPickedUri != null || selectedAvatarOverlay != null) {
-                    val previewModifier = if (selectedType == UploadContentType.VERTICAL_CLIP) {
-                        Modifier
+                if (capturedOrPickedUri != null) {
+                    val previewModifier = when (selectedType) {
+                        UploadContentType.VERTICAL_CLIP -> Modifier
                             .width(176.dp)
-                            .height(260.dp)
-                    } else {
-                        Modifier
+                            .aspectRatio(9f / 16f)
+                        UploadContentType.PHOTO_POST -> Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(4f / 3f)
+                        UploadContentType.HORIZONTAL_VIDEO -> Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
                     }
@@ -185,23 +189,13 @@ fun UploadStudioScreen(
                             .background(Color(0xFF0E131B))
                     ) {
                         MediaSceneArtwork(
-                            visualStyle = if (capturedOrPickedUri != null) {
-                                MediaVisualStyle.CUSTOM_URI
-                            } else if (selectedType == UploadContentType.VERTICAL_CLIP) {
-                                MediaVisualStyle.CYBER_CITY
-                            } else {
-                                MediaVisualStyle.STUDIO_PHOTO
-                            },
+                            visualStyle = MediaVisualStyle.CUSTOM_URI,
                             mediaUriString = capturedOrPickedUri,
-                            avatarOverlay = selectedAvatarOverlay,
-                            isPlaying = capturedOrPickedUri != null,
+                            isPlaying = selectedType != UploadContentType.PHOTO_POST,
                             modifier = Modifier.fillMaxSize()
                         )
                         IconButton(
-                            onClick = {
-                                capturedOrPickedUri = null
-                                selectedAvatarOverlay = null
-                            },
+                            onClick = { capturedOrPickedUri = null },
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(6.dp)
@@ -211,7 +205,7 @@ fun UploadStudioScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = "إزالة الفيديو",
+                                contentDescription = "إزالة الملف",
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -226,8 +220,8 @@ fun UploadStudioScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
                             .clickable {
-                                videoPicker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                mediaPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                                 )
                             },
                         contentAlignment = Alignment.Center
@@ -239,43 +233,43 @@ fun UploadStudioScreen(
                                     .clip(CircleShape)
                                     .background(
                                         Brush.linearGradient(
-                                            listOf(Color(0xFFFF7A1A), Color(0xFF10B981))
+                                            listOf(primaryAccent, secondaryAccent)
                                         )
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.VideoLibrary,
-                                    contentDescription = "اختيار فيديو",
+                                    imageVector = Icons.Filled.PhotoLibrary,
+                                    contentDescription = "اختيار صورة أو فيديو",
                                     tint = Color.White,
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "اضغط لاختيار فيديو من الهاتف",
+                                text = "اضغط لاختيار فيديو أو صورة من الهاتف",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "الفيديو العمودي ينشر تلقائياً في clips فقط",
+                                text = "يتم التعرف تلقائياً على المقاس والوجهة المناسبة",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF10B981)
+                                color = secondaryAccent
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                // Two clean actions: Pick Video from device + Dedicated Video Camera with Avatars button
+                // Pick Media from device + Pro Camera (Photo & Video) button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedButton(
                         onClick = {
-                            videoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                            mediaPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                             )
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -284,23 +278,23 @@ fun UploadStudioScreen(
                             .height(48.dp)
                             .testTag("upload_pick_media_button")
                     ) {
-                        Icon(Icons.Filled.VideoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (capturedOrPickedUri == null) "اختيار فيديو" else "تغيير")
+                        Text(if (capturedOrPickedUri == null) "اختيار ملف" else "تغيير")
                     }
 
                     Button(
                         onClick = { showCameraDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        colors = ButtonDefaults.buttonColors(containerColor = secondaryAccent),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
                             .testTag("open_camera_studio_button")
                     ) {
-                        Icon(Icons.Filled.Videocam, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("تصوير فيديو", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("الكاميرا الاحترافية", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -308,7 +302,7 @@ fun UploadStudioScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Clean Upload Form: Video Orientation (Horizontal -> Home, Vertical -> clips only) + Title + Description
+        // Clean Upload Form: Content Type + Title + Description
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -319,27 +313,26 @@ fun UploadStudioScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "اتجاه الفيديو ووجهة النشر",
+                    text = "نوع المحتوى ووجهة النشر",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Only Horizontal (Home) and Vertical (clips only) — Posts are exclusively in Posts tab!
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val videoTypes = listOf(
-                        UploadContentType.HORIZONTAL_VIDEO to Icons.Filled.StayCurrentLandscape,
-                        UploadContentType.VERTICAL_CLIP to Icons.Filled.StayCurrentPortrait
+                    val uploadTypes = listOf(
+                        Triple(UploadContentType.HORIZONTAL_VIDEO, Icons.Filled.StayCurrentLandscape, "فيديو أفقي"),
+                        Triple(UploadContentType.VERTICAL_CLIP, Icons.Filled.StayCurrentPortrait, "clips"),
+                        Triple(UploadContentType.PHOTO_POST, Icons.Filled.CameraAlt, "صورة")
                     )
-                    videoTypes.forEach { (type, icon) ->
+                    uploadTypes.forEach { (type, icon, label) ->
                         val active = selectedType == type
-                        val label = if (type == UploadContentType.HORIZONTAL_VIDEO) "فيديو أفقي" else "فيديو عمودي (clips)"
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = if (active) Color(0xFFFF7A1A) else MaterialTheme.colorScheme.surfaceVariant,
+                            color = if (active) primaryAccent else MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
@@ -350,7 +343,7 @@ fun UploadStudioScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(horizontal = 8.dp),
+                                    .padding(horizontal = 6.dp),
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -358,9 +351,9 @@ fun UploadStudioScreen(
                                     imageVector = icon,
                                     contentDescription = null,
                                     tint = if (active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = label,
                                     style = MaterialTheme.typography.labelMedium,
@@ -376,13 +369,13 @@ fun UploadStudioScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = if (selectedType == UploadContentType.VERTICAL_CLIP) {
-                        "سيتم نشر الفيديو العمودي في قسم clips فقط"
-                    } else {
-                        "سيتم نشر الفيديو الأفقي في الصفحة الرئيسية"
+                    text = when (selectedType) {
+                        UploadContentType.VERTICAL_CLIP -> "سيتم نشر المقطع العمودي في قسم clips"
+                        UploadContentType.PHOTO_POST -> "سيتم نشر الصورة في قسم المنشورات"
+                        UploadContentType.HORIZONTAL_VIDEO -> "سيتم نشر الفيديو الأفقي في الصفحة الرئيسية"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF10B981),
+                    color = secondaryAccent,
                     fontWeight = FontWeight.SemiBold
                 )
 
@@ -391,8 +384,8 @@ fun UploadStudioScreen(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("عنوان الفيديو") },
-                    placeholder = { Text("اكتب عنواناً جذاباً للفيديو…") },
+                    label = { Text(if (selectedType == UploadContentType.PHOTO_POST) "عنوان المنشور" else "عنوان الفيديو") },
+                    placeholder = { Text("اكتب عنواناً جذاباً…") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -405,8 +398,8 @@ fun UploadStudioScreen(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("وصف الفيديو") },
-                    placeholder = { Text("أضف وصفاً يوضح محتوى الفيديو…") },
+                    label = { Text("الوصف") },
+                    placeholder = { Text("أضف وصفاً يوضح المحتوى…") },
                     minLines = 3,
                     maxLines = 5,
                     shape = RoundedCornerShape(16.dp),
@@ -419,10 +412,10 @@ fun UploadStudioScreen(
 
                 Button(
                     onClick = {
-                        val visualStyle = if (selectedType == UploadContentType.VERTICAL_CLIP) {
-                            MediaVisualStyle.CYBER_CITY
-                        } else {
-                            MediaVisualStyle.STUDIO_PHOTO
+                        val visualStyle = when (selectedType) {
+                            UploadContentType.VERTICAL_CLIP -> MediaVisualStyle.CYBER_CITY
+                            UploadContentType.PHOTO_POST -> MediaVisualStyle.STUDIO_PHOTO
+                            UploadContentType.HORIZONTAL_VIDEO -> MediaVisualStyle.STUDIO_PHOTO
                         }
                         onPublish(
                             selectedType,
@@ -431,14 +424,13 @@ fun UploadStudioScreen(
                             if (selectedType == UploadContentType.VERTICAL_CLIP) "clips" else "عام",
                             visualStyle,
                             capturedOrPickedUri,
-                            selectedAvatarOverlay?.id
+                            null
                         )
                         title = ""
                         description = ""
                         capturedOrPickedUri = null
-                        selectedAvatarOverlay = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7A1A)),
+                    colors = ButtonDefaults.buttonColors(containerColor = uploadButtonAccent),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -448,10 +440,10 @@ fun UploadStudioScreen(
                     Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (selectedType == UploadContentType.VERTICAL_CLIP) {
-                            "نشر الفيديو في clips"
-                        } else {
-                            "نشر في الصفحة الرئيسية"
+                        text = when (selectedType) {
+                            UploadContentType.VERTICAL_CLIP -> "نشر الفيديو في clips"
+                            UploadContentType.PHOTO_POST -> "نشر الصورة في المنشورات"
+                            UploadContentType.HORIZONTAL_VIDEO -> "نشر في الصفحة الرئيسية"
                         },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
@@ -462,17 +454,14 @@ fun UploadStudioScreen(
         }
     }
 
-    // Dedicated Full-Screen Video Recording Camera + Open-Source High-Quality Avatars Dialog
     if (showCameraDialog) {
-        CameraAvatarVideoStudioDialog(
-            initialAvatar = selectedAvatarOverlay ?: DemoDataFactory.avatarPresets.first(),
-            onVideoRecorded = { uri, avatar ->
+        ProCameraStudioDialog(
+            onMediaCaptured = { uri, isPhoto ->
                 capturedOrPickedUri = uri
-                selectedAvatarOverlay = avatar
-                selectedType = if (uri != null) {
-                    detectVideoContentType(context, Uri.parse(uri))
-                } else {
-                    UploadContentType.VERTICAL_CLIP
+                selectedType = when {
+                    isPhoto -> UploadContentType.PHOTO_POST
+                    uri != null -> detectMediaContentType(context, Uri.parse(uri))
+                    else -> UploadContentType.VERTICAL_CLIP
                 }
                 showCameraDialog = false
             },
@@ -481,7 +470,18 @@ fun UploadStudioScreen(
     }
 }
 
-private fun detectVideoContentType(context: Context, uri: Uri): UploadContentType {
+private fun detectMediaContentType(context: Context, uri: Uri): UploadContentType {
+    val uriStr = uri.toString()
+    val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+    if (mime?.startsWith("image/") == true ||
+        uriStr.endsWith(".jpg", ignoreCase = true) ||
+        uriStr.endsWith(".jpeg", ignoreCase = true) ||
+        uriStr.endsWith(".png", ignoreCase = true) ||
+        uriStr.endsWith(".webp", ignoreCase = true)
+    ) {
+        return UploadContentType.PHOTO_POST
+    }
+
     return runCatching {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(context, uri)
