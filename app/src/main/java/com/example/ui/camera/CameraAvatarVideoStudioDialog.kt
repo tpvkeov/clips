@@ -4,24 +4,17 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
-import androidx.camera.core.CameraEffect.IMAGE_CAPTURE
-import androidx.camera.core.CameraEffect.PREVIEW
-import androidx.camera.core.CameraEffect.VIDEO_CAPTURE
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
-import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.effects.OverlayEffect
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -117,8 +110,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.example.model.MediaVisualStyle
-import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
 import java.io.File
@@ -169,6 +160,17 @@ fun ProCameraStudioDialog(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
 
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.CAMERA,
+                    Manifest.permission.RECORD_AUDIO
+                )
+            )
+        }
+    }
+
     var captureMode by remember { mutableStateOf(ProCaptureMode.VIDEO) }
     var aspectRatio by remember { mutableStateOf(ProCameraAspectRatio.RATIO_9_16) }
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
@@ -198,8 +200,6 @@ fun ProCameraStudioDialog(
     var isTakingPhoto by remember { mutableStateOf(false) }
     var showShutterFlash by remember { mutableStateOf(false) }
     var focusTapOffset by remember { mutableStateOf<Offset?>(null) }
-    var useComposeFallbackOverlay by remember { mutableStateOf(false) }
-    var fallbackRenderTick by remember { mutableIntStateOf(0) }
 
     val colorState = remember { ProCameraColorState() }
     val colorRenderer = remember(colorState) { ProCameraColorRenderer(colorState) }
@@ -225,8 +225,8 @@ fun ProCameraStudioDialog(
             .setAspectRatio(cameraAspect)
             .setQualitySelector(
                 QualitySelector.fromOrderedList(
-                    listOf(Quality.FHD, Quality.HD, Quality.SD),
-                    FallbackStrategy.higherQualityOrLowerThan(Quality.HD)
+                    listOf(Quality.HD, Quality.SD, Quality.LOWEST),
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
                 )
             )
             .build()
@@ -322,15 +322,6 @@ fun ProCameraStudioDialog(
         }
     }
 
-    LaunchedEffect(useComposeFallbackOverlay, selectedFilter, softExposureFraction) {
-        if (useComposeFallbackOverlay) {
-            while (true) {
-                fallbackRenderTick++
-                delay(40L)
-            }
-        }
-    }
-
     DisposableEffect(Unit) {
         onDispose {
             runCatching { activeRecording?.stop() }
@@ -408,26 +399,19 @@ fun ProCameraStudioDialog(
                         ProCameraXPreviewBox(
                             lensFacing = lensFacing,
                             cameraAspect = cameraAspect,
+                            captureMode = captureMode,
                             videoCapture = videoCapture,
                             imageCapture = imageCapture,
-                            colorRenderer = colorRenderer,
                             lifecycleOwner = lifecycleOwner,
                             onCameraBound = { cam -> boundCamera = cam },
                             onPreviewViewReady = { pv -> boundPreviewView = pv },
-                            onOverlayFallbackRequired = { needed -> useComposeFallbackOverlay = needed },
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        MediaSceneArtwork(
-                            visualStyle = MediaVisualStyle.STUDIO_PHOTO,
-                            mediaUriString = null,
-                            isPlaying = true,
-                            modifier = Modifier.fillMaxSize()
-                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.60f))
+                                .background(Color(0xFF0A0E14))
                                 .padding(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -440,7 +424,7 @@ fun ProCameraStudioDialog(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = "اسمح بالوصول للكاميرا والميكروفون للتصوير الاحترافي (صور وفيديو)",
+                                    text = "يرجى السماح بالوصول للكاميرا لبدء التصوير مباشرة",
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium,
                                     textAlign = TextAlign.Center
@@ -465,11 +449,13 @@ fun ProCameraStudioDialog(
                         }
                     }
 
-                    // Fallback soft color/lighting overlay when HAL skips OverlayEffect
-                    if (useComposeFallbackOverlay || !hasCameraPermission) {
+                    // Real-time Compose soft color/lighting overlay (crash-free across all GL drivers & emulators)
+                    val supportsHwEv = maxExposureIdx > minExposureIdx
+                    if (hasCameraPermission && (selectedFilter != CameraColorFilter.NATURAL || (!supportsHwEv && kotlin.math.abs(softExposureFraction) >= 0.04f))) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            @Suppress("UNUSED_EXPRESSION")
-                            fallbackRenderTick
+                            // Read state directly so Canvas redraws immediately when filter or fill changes
+                            colorState.activeFilter.set(selectedFilter)
+                            colorState.softLightingFill.set(if (supportsHwEv) 0f else softExposureFraction)
                             colorRenderer.renderToOverlayCanvas(
                                 canvas = drawContext.canvas.nativeCanvas,
                                 width = size.width,
@@ -1020,11 +1006,16 @@ fun ProCameraStudioDialog(
                             )
                             .testTag("camera_shutter_button")
                             .clickable(enabled = !isTakingPhoto) {
+                                if (!hasCameraPermission) {
+                                    permissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.CAMERA,
+                                            Manifest.permission.RECORD_AUDIO
+                                        )
+                                    )
+                                    return@clickable
+                                }
                                 if (captureMode == ProCaptureMode.PHOTO) {
-                                    if (!hasCameraPermission) {
-                                        onMediaCaptured(null, true)
-                                        return@clickable
-                                    }
                                     isTakingPhoto = true
                                     showShutterFlash = true
                                     val photoFile = File(
@@ -1186,13 +1177,12 @@ private fun ProToolPillButton(
 private fun ProCameraXPreviewBox(
     lensFacing: Int,
     cameraAspect: Int,
+    captureMode: ProCaptureMode,
     videoCapture: VideoCapture<Recorder>,
     imageCapture: ImageCapture,
-    colorRenderer: ProCameraColorRenderer,
     lifecycleOwner: LifecycleOwner,
     onCameraBound: (Camera?) -> Unit,
     onPreviewViewReady: (PreviewView) -> Unit,
-    onOverlayFallbackRequired: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1207,54 +1197,7 @@ private fun ProCameraXPreviewBox(
         onPreviewViewReady(previewView)
     }
 
-    val overlayAll = remember {
-        OverlayEffect(
-            PREVIEW or VIDEO_CAPTURE or IMAGE_CAPTURE,
-            0,
-            Handler(Looper.getMainLooper())
-        ) { _ ->
-            onOverlayFallbackRequired(true)
-        }.apply {
-            setOnDrawListener { frame ->
-                colorRenderer.renderToOverlayCanvas(
-                    canvas = frame.overlayCanvas,
-                    width = frame.size.width.toFloat(),
-                    height = frame.size.height.toFloat(),
-                    clearBackground = true
-                )
-                true
-            }
-        }
-    }
-
-    val overlayVideoOnly = remember {
-        OverlayEffect(
-            PREVIEW or VIDEO_CAPTURE,
-            0,
-            Handler(Looper.getMainLooper())
-        ) { _ ->
-            onOverlayFallbackRequired(true)
-        }.apply {
-            setOnDrawListener { frame ->
-                colorRenderer.renderToOverlayCanvas(
-                    canvas = frame.overlayCanvas,
-                    width = frame.size.width.toFloat(),
-                    height = frame.size.height.toFloat(),
-                    clearBackground = true
-                )
-                true
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            runCatching { overlayAll.close() }
-            runCatching { overlayVideoOnly.close() }
-        }
-    }
-
-    DisposableEffect(lensFacing, cameraAspect, videoCapture, imageCapture) {
+    DisposableEffect(lensFacing, cameraAspect, captureMode, videoCapture, imageCapture) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         val executor = ContextCompat.getMainExecutor(context)
         var cameraProvider: ProcessCameraProvider? = null
@@ -1283,38 +1226,24 @@ private fun ProCameraXPreviewBox(
                     .build()
                 cameraProvider?.unbindAll()
 
-                val groupAll = UseCaseGroup.Builder()
-                    .addUseCase(preview)
-                    .addUseCase(videoCapture)
-                    .addUseCase(imageCapture)
-                    .addEffect(overlayAll)
-                    .build()
-
+                val activeUseCase = if (captureMode == ProCaptureMode.VIDEO) videoCapture else imageCapture
                 val bound = runCatching {
-                    onOverlayFallbackRequired(false)
-                    cameraProvider?.bindToLifecycle(lifecycleOwner, selector, groupAll)
+                    cameraProvider?.bindToLifecycle(
+                        lifecycleOwner,
+                        selector,
+                        preview,
+                        activeUseCase
+                    )
                 }.getOrElse {
+                    // Fallback to preview-only if device/emulator camera lacks VideoCapture/ImageCapture profile
                     cameraProvider?.unbindAll()
-                    val groupVideo = UseCaseGroup.Builder()
-                        .addUseCase(preview)
-                        .addUseCase(videoCapture)
-                        .addUseCase(imageCapture)
-                        .addEffect(overlayVideoOnly)
-                        .build()
                     runCatching {
-                        onOverlayFallbackRequired(false)
-                        cameraProvider?.bindToLifecycle(lifecycleOwner, selector, groupVideo)
-                    }.getOrElse {
-                        cameraProvider?.unbindAll()
-                        onOverlayFallbackRequired(true)
                         cameraProvider?.bindToLifecycle(
                             lifecycleOwner,
                             selector,
-                            preview,
-                            videoCapture,
-                            imageCapture
+                            preview
                         )
-                    }
+                    }.getOrNull()
                 }
                 onCameraBound(bound)
             }

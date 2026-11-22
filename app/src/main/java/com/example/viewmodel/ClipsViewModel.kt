@@ -30,6 +30,11 @@ data class SaveFeedbackEvent(
     val isSaving: Boolean
 )
 
+data class ShareFeedbackEvent(
+    val id: Long,
+    val isNewPointsAwarded: Boolean = true
+)
+
 data class ClipsUiState(
     val currentTab: MainTab = MainTab.HOME,
     val isBottomBarVisible: Boolean = true,
@@ -52,7 +57,9 @@ data class ClipsUiState(
     val commentsTarget: CommentsTarget? = null,
     val isClipsAltLayout: Boolean = false,
     val feedbackMessage: String? = null,
-    val saveFeedbackEvent: SaveFeedbackEvent? = null
+    val saveFeedbackEvent: SaveFeedbackEvent? = null,
+    val shareFeedbackEvent: ShareFeedbackEvent? = null,
+    val rewardedSharedContentIds: Set<String> = emptySet()
 ) {
     val activePlayerVideo: VideoItem?
         get() = activePlayerVideoId?.let { id ->
@@ -447,14 +454,22 @@ class ClipsViewModel : ViewModel() {
 
     fun shareVideo(videoId: String) {
         _uiState.update { state ->
+            val isFirstShare = videoId !in state.rewardedSharedContentIds
+            val newPoints = if (isFirstShare) state.userProfile.points + 2 else state.userProfile.points
+            val newRewardedIds = if (isFirstShare) state.rewardedSharedContentIds + videoId else state.rewardedSharedContentIds
+            val updatedProfile = state.userProfile.copy(points = newPoints)
+            val nextEventId = System.currentTimeMillis()
             state.copy(
+                userProfile = updatedProfile,
+                rewardedSharedContentIds = newRewardedIds,
                 horizontalVideos = state.horizontalVideos.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
                 verticalClips = state.verticalClips.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                feedbackMessage = "تم نسخ رابط الفيديو للمشاركة"
+                shareFeedbackEvent = ShareFeedbackEvent(nextEventId, isNewPointsAwarded = isFirstShare),
+                feedbackMessage = null
             )
         }
     }
@@ -477,13 +492,25 @@ class ClipsViewModel : ViewModel() {
 
     fun sharePost(postId: String) {
         _uiState.update { state ->
+            val isFirstShare = postId !in state.rewardedSharedContentIds
+            val newPoints = if (isFirstShare) state.userProfile.points + 2 else state.userProfile.points
+            val newRewardedIds = if (isFirstShare) state.rewardedSharedContentIds + postId else state.rewardedSharedContentIds
+            val updatedProfile = state.userProfile.copy(points = newPoints)
+            val nextEventId = System.currentTimeMillis()
             state.copy(
+                userProfile = updatedProfile,
+                rewardedSharedContentIds = newRewardedIds,
                 posts = state.posts.map {
                     if (it.id == postId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                feedbackMessage = "تمت مشاركة المنشور بنجاح"
+                shareFeedbackEvent = ShareFeedbackEvent(nextEventId, isNewPointsAwarded = isFirstShare),
+                feedbackMessage = null
             )
         }
+    }
+
+    fun clearShareFeedback() {
+        _uiState.update { it.copy(shareFeedbackEvent = null) }
     }
 
     fun addComment(target: CommentsTarget, text: String) {

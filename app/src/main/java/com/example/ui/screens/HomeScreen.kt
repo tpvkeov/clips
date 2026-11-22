@@ -273,7 +273,7 @@ fun HomeScreen(
 
             item(key = "horizontal_videos_header") {
                 SectionHeaderRow(
-                    title = if (searchQuery.isBlank()) "فيديوهات عريضة مختارة" else "نتائج البحث",
+                    title = if (searchQuery.isBlank()) "الفيديوهات" else "نتائج البحث",
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 760.dp)
@@ -458,45 +458,6 @@ private fun HorizontalVideoCard(
                         )
                     )
             )
-
-            // Hero highlight pill ONLY on the primary leading video when not searching
-            if (isFeaturedHero && overlayAvatar == null) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color(0xFF0A1018).copy(alpha = 0.78f),
-                    border = BorderStroke(
-                        0.75.dp,
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "مختار اليوم",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
 
             // Center Play Pill
             val actionAccent = LocalCustomButtonColors.current.actionButtonsColor

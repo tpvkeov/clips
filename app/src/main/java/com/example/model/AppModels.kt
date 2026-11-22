@@ -129,7 +129,8 @@ data class UserProfile(
     val followersCount: String,
     val followingCount: String,
     val totalLikesCount: String,
-    val avatarPresetId: String
+    val avatarPresetId: String,
+    val points: Int = 18
 )
 
 data class CreatorChannelInfo(

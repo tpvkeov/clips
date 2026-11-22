@@ -3,8 +3,13 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -14,6 +19,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -72,6 +79,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -404,20 +412,11 @@ private fun ReelPageItem(
             }
         }
 
-        // Double tap heart burst
-        AnimatedVisibility(
+        // Glowing heart burst with 3 rotating rings and floating hearts
+        ClipsHeartGlowBurstEffect(
             visible = showDoubleTapHeart,
-            enter = fadeIn() + scaleIn(initialScale = 0.5f),
-            exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Favorite,
-                contentDescription = null,
-                tint = actionAccent,
-                modifier = Modifier.size(108.dp)
-            )
-        }
+            onFinished = { showDoubleTapHeart = false }
+        )
 
         AnimatedContent(
             targetState = isAltLayout,
@@ -457,13 +456,14 @@ private fun ReelPageItem(
                             }
 
                             ReelActionButton(
-                                icon = if (clip.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                icon = Icons.Filled.Favorite,
                                 countText = formatCompactCount(clip.likesCount),
-                                tint = if (clip.isLiked) actionAccent else Color.White,
+                                tint = Color(0xFFFF2D55),
                                 contentDesc = "إعجاب",
                                 onClick = {
                                     onToggleLike()
                                     triggerLikeShakeAndHaptic()
+                                    showDoubleTapHeart = true
                                 },
                                 modifier = Modifier
                                     .graphicsLayer {
@@ -749,13 +749,14 @@ private fun ReelPageItem(
                                     )
 
                                     CompactPillStatButton(
-                                        icon = if (clip.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                        icon = Icons.Filled.Favorite,
                                         text = formatCompactCount(clip.likesCount),
-                                        tint = if (clip.isLiked) Color(0xFFFF4D6D) else Color.White,
+                                        tint = Color(0xFFFF2D55),
                                         contentDesc = "إعجاب",
                                         onClick = {
                                             onToggleLike()
                                             triggerLikeShakeAndHaptic()
+                                            showDoubleTapHeart = true
                                         },
                                         modifier = Modifier
                                             .graphicsLayer {
@@ -1012,5 +1013,127 @@ private fun ReelActionButton(
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+fun ClipsHeartGlowBurstEffect(
+    visible: Boolean,
+    onFinished: () -> Unit
+) {
+    if (!visible) return
+
+    val infiniteTransition = rememberInfiniteTransition(label = "glow_rings")
+    val ring1Scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 2.0f,
+        animationSpec = infiniteRepeatable(animation = tween(1100, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "r1"
+    )
+    val ring1Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(animation = tween(1100, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "a1"
+    )
+
+    val ring2Scale by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(animation = tween(1300, delayMillis = 250, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "r2"
+    )
+    val ring2Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(animation = tween(1300, delayMillis = 250, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "a2"
+    )
+
+    val ring3Scale by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 3.0f,
+        animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 500, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "r3"
+    )
+    val ring3Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.7f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 500, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Restart),
+        label = "a3"
+    )
+
+    val riseAnim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        riseAnim.snapTo(0f)
+        riseAnim.animateTo(1f, animationSpec = tween(1200, easing = FastOutSlowInEasing))
+        delay(100L)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // 3 Glowing Rotating Concentric Circles
+        Box(modifier = Modifier.size(180.dp), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(140.dp)
+                    .scale(ring1Scale)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF2D55).copy(alpha = ring1Alpha * 0.45f))
+                    .border(2.dp, Color(0xFFFF6B8B).copy(alpha = ring1Alpha), CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(110.dp)
+                    .scale(ring2Scale)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF4D6D).copy(alpha = ring2Alpha * 0.35f))
+                    .border(1.5.dp, Color(0xFFFF9EBA).copy(alpha = ring2Alpha), CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .scale(ring3Scale)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF2D55).copy(alpha = ring3Alpha * 0.25f))
+                    .border(1.dp, Color.White.copy(alpha = ring3Alpha * 0.9f), CircleShape)
+            )
+
+            // Center Heart Icon glowing
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color(0xFFFF2D55),
+                modifier = Modifier.size(104.dp)
+            )
+        }
+
+        // Small floating hearts rising from bottom to top
+        val riseFraction = riseAnim.value
+        val offsets = listOf(
+            Offset(-60f, 140f * (1f - riseFraction)),
+            Offset(50f, 170f * (1f - riseFraction)),
+            Offset(-110f, 110f * (1f - riseFraction)),
+            Offset(90f, 150f * (1f - riseFraction)),
+            Offset(-20f, 180f * (1f - riseFraction)),
+            Offset(20f, 130f * (1f - riseFraction))
+        )
+        val scales = listOf(0.7f, 1.0f, 0.5f, 0.85f, 0.6f, 0.75f)
+
+        offsets.forEachIndexed { index, offset ->
+            val alpha = (1f - riseFraction).coerceIn(0f, 1f)
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color(0xFFFF4D6D).copy(alpha = alpha),
+                modifier = Modifier
+                    .offset(x = offset.x.dp, y = offset.y.dp)
+                    .scale(scales[index] * (0.7f + riseFraction * 0.5f))
+                    .size(26.dp)
+            )
+        }
     }
 }

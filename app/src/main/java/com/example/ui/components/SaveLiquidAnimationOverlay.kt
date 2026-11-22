@@ -1,7 +1,8 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedContent
+import com.example.ui.theme.LocalCustomButtonColors
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -37,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -63,9 +65,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
@@ -73,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.example.viewmodel.SaveFeedbackEvent
+import com.example.viewmodel.ShareFeedbackEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -688,3 +696,184 @@ fun SaveLiquidAnimationOverlay(
         }
     }
 }
+
+/**
+ * Share feedback overlay shown when user shares a video or post:
+ * Displays checkmark ("علامة صح") with:
+ * "شكرا لمشاركه ومساعده النموي بكل جميل ونحن نقدر ذلك"
+ * and "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
+ */
+@Composable
+fun ShareFeedbackOverlay(
+    event: ShareFeedbackEvent?,
+    onDismiss: () -> Unit = {}
+) {
+    var visible by remember { mutableStateOf(false) }
+    var activeEventId by remember { mutableLongStateOf(0L) }
+    val popScale = remember { Animatable(0.75f) }
+    val checkPulse = remember { Animatable(0.7f) }
+    val clipboardManager = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(event?.id) {
+        if (event != null && event.id > 0L) {
+            activeEventId = event.id
+            clipboardManager.setText(AnnotatedString("https://clips.app/share/${event.id}"))
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            visible = true
+            popScale.snapTo(0.75f)
+            checkPulse.snapTo(0.6f)
+            launch {
+                popScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            launch {
+                checkPulse.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
+            }
+            delay(3200L)
+            visible = false
+            onDismiss()
+        }
+    }
+
+    if (visible) {
+        Popup(
+            alignment = Alignment.Center,
+            properties = PopupProperties(
+                focusable = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.85f, animationSpec = tween(180)),
+                    exit = fadeOut(tween(200)) + scaleOut(targetScale = 0.90f, animationSpec = tween(200))
+                ) {
+                    val primaryAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.97f),
+                        shadowElevation = 24.dp,
+                        border = BorderStroke(
+                            width = 1.6.dp,
+                            brush = Brush.linearGradient(
+                                listOf(primaryAccent, Color(0xFF38BDF8), Color(0xFF10B981))
+                            )
+                        ),
+                        modifier = Modifier
+                            .testTag("share_feedback_overlay_$activeEventId")
+                            .padding(horizontal = 24.dp)
+                            .sizeIn(minWidth = 280.dp, maxWidth = 360.dp)
+                            .scale(popScale.value)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                visible = false
+                                onDismiss()
+                            }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .clip(CircleShape)
+                                    .background(primaryAccent.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .scale(checkPulse.value)
+                                        .clip(CircleShape)
+                                        .background(primaryAccent),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = "تمت المشاركة",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            val isNewPoints = event?.isNewPointsAwarded ?: true
+
+                            Text(
+                                text = "شكرا لمشاركه ومساعده النموي بكل جميل ونحن نقدر ذلك ✨",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = primaryAccent.copy(alpha = 0.16f),
+                                border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Star,
+                                        contentDescription = null,
+                                        tint = primaryAccent,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = if (isNewPoints)
+                                            "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
+                                        else
+                                            "تم نسخ الرابط بنجاح وبشكل جميل",
+                                        color = primaryAccent,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = if (isNewPoints)
+                                    "(+2 نقاط مساهمة في رصيدك) 🚀"
+                                else
+                                    "(تم احتساب نقاط هذا المحتوى مسبقاً — نقطة واحدة لكل فيديو) ✨",
+                                color = Color.White.copy(alpha = 0.65f),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

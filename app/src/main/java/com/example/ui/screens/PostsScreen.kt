@@ -493,7 +493,9 @@ private fun PostCardItem(
                     label = "مشاركة (${post.sharesCount})",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onShare,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("post_share_${post.id}")
                 )
             }
         }

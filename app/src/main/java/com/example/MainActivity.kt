@@ -40,6 +40,7 @@ import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.FloatingPillBottomBar
 import com.example.ui.components.HorizontalVideoPlayerSheet
 import com.example.ui.components.SaveLiquidAnimationOverlay
+import com.example.ui.components.ShareFeedbackOverlay
 import com.example.ui.components.StoryViewerOverlay
 import com.example.ui.screens.ClipsReelsScreen
 import com.example.ui.screens.CreatorProfileScreen
@@ -147,6 +148,7 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                         )
 
                         MainTab.UPLOAD -> UploadStudioScreen(
+                            userProfile = state.userProfile,
                             onPublish = viewModel::publishFromUpload,
                             onScrollDelta = viewModel::onScrollDelta
                         )
@@ -261,8 +263,14 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                             state.posts.find { it.id == target.postId }?.comments ?: emptyList()
                         }
                     }
+                    val targetPost = if (target is CommentsTarget.Post) {
+                        state.posts.find { it.id == target.postId }
+                    } else {
+                        null
+                    }
                     CommentsBottomSheet(
                         comments = commentsList,
+                        targetPost = targetPost,
                         startInAddMode = target.startInAddMode,
                         getAvatarPreset = viewModel::getAvatarPreset,
                         onAddComment = { text -> viewModel.addComment(target, text) },
@@ -302,6 +310,11 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
 
                 SaveLiquidAnimationOverlay(
                     event = state.saveFeedbackEvent
+                )
+
+                ShareFeedbackOverlay(
+                    event = state.shareFeedbackEvent,
+                    onDismiss = viewModel::clearShareFeedback
                 )
             }
             }

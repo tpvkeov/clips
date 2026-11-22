@@ -109,7 +109,7 @@ object DemoDataFactory {
         ),
         AvatarPreset(
             id = "av_badge",
-            nameAr = "نجم المنصة",
+            nameAr = "صانع محتوى مميز",
             categoryAr = "صانع محتوى",
             primaryColor = Color(0xFF1E293B),
             secondaryColor = Color(0xFFEC4899),
@@ -195,7 +195,8 @@ object DemoDataFactory {
         followersCount = "148K",
         followingCount = "312",
         totalLikesCount = "1.9M",
-        avatarPresetId = "av_creator"
+        avatarPresetId = "av_creator",
+        points = 18
     )
 
     val categories: List<String> = listOf("الكل", "تقنية", "سفر", "ألعاب", "تصميم", "طبخ")
@@ -309,6 +310,71 @@ object DemoDataFactory {
             category = "طبخ",
             timeAgo = "منذ 4 أيام",
             visualStyle = MediaVisualStyle.COOKING_WARM
+        ),
+        VideoItem(
+            id = "h7",
+            title = "أسرار الإخراج السينمائي للأفلام الوثائقية واستخدام العدسات المقربة",
+            description = "كيف تحكي قصة بصرية مشوقة مع زوايا إبداعية واختيار موسيقى تصويرية مؤثرة.",
+            creatorName = "نور الإبداع",
+            creatorHandle = "@noor_visuals",
+            creatorAvatarId = "av_director",
+            duration = "18:45",
+            viewsCount = 92300,
+            likesCount = 7650,
+            sharesCount = 580,
+            orientation = VideoOrientation.HORIZONTAL,
+            category = "تقنية",
+            timeAgo = "منذ 5 أيام",
+            visualStyle = MediaVisualStyle.STUDIO_PHOTO
+        ),
+        VideoItem(
+            id = "h8",
+            title = "مغامرة في جبال الألب السويسرية — تصوير سينمائي 4K بطائرات الدرون",
+            description = "مشاهد جوية خلابة للقمم الثلجية والبحيرات الزرقاء في قلب الطبيعة البكر.",
+            creatorName = "رحالة الصحراء",
+            creatorHandle = "@desert_wanderer",
+            creatorAvatarId = "av_traveler",
+            duration = "12:20",
+            viewsCount = 178000,
+            likesCount = 14200,
+            sharesCount = 1350,
+            orientation = VideoOrientation.HORIZONTAL,
+            category = "سفر",
+            timeAgo = "منذ أسبوع",
+            visualStyle = MediaVisualStyle.TRAVEL_SUNSET
+        ),
+        VideoItem(
+            id = "h9",
+            title = "بناء وتجهيز استوديو بودكاست احترافي بأقل تكلفة للمبتدئين",
+            description = "تفاصيل الميكروفونات والكابلات وعوازل الصوت الصوتية لتسجيل محتوى بأعلى نقاء.",
+            creatorName = "أحمد المنصور",
+            creatorHandle = "@ahmed_studio",
+            creatorAvatarId = "av_creator",
+            duration = "15:10",
+            viewsCount = 61200,
+            likesCount = 4950,
+            sharesCount = 380,
+            orientation = VideoOrientation.HORIZONTAL,
+            category = "تصميم",
+            timeAgo = "منذ أسبوع",
+            visualStyle = MediaVisualStyle.PODCAST_MIC,
+            isMine = true
+        ),
+        VideoItem(
+            id = "h10",
+            title = "تحدي تجميع أقوى حاسوب مخصص للمونتاج والألعاب لعام 2026 مع بطاقة RTX 5090",
+            description = "اختبار قوة المعالجة والتبريد المائي وسرعة الرندرة في برامج المونتاج السينمائي.",
+            creatorName = "جيمر زون",
+            creatorHandle = "@gamer_zone",
+            creatorAvatarId = "av_gamer",
+            duration = "24:18",
+            viewsCount = 310000,
+            likesCount = 22400,
+            sharesCount = 2100,
+            orientation = VideoOrientation.HORIZONTAL,
+            category = "ألعاب",
+            timeAgo = "منذ أسبوعين",
+            visualStyle = MediaVisualStyle.GAMING_NEON
         )
     )
 
@@ -404,6 +470,91 @@ object DemoDataFactory {
             timeAgo = "منذ يومين",
             visualStyle = MediaVisualStyle.DESIGN_GRID,
             musicTitle = "Lo-Fi التصميم • Chill Vibes"
+        ),
+        VideoItem(
+            id = "v6",
+            title = "أسرار الطهي السريع للوجبات الصحية في 5 دقائق 🍳",
+            description = "وصفة سريعة ولذيذة لإفطار صباحي طاقوي ومتوازن #طبخ #صحي",
+            creatorName = "مذاق الشيف",
+            creatorHandle = "@chef_taste",
+            creatorAvatarId = "av_crown",
+            duration = "00:42",
+            viewsCount = 210000,
+            likesCount = 19400,
+            sharesCount = 1120,
+            orientation = VideoOrientation.VERTICAL,
+            category = "طبخ",
+            timeAgo = "منذ 3 أيام",
+            visualStyle = MediaVisualStyle.COOKING_WARM,
+            musicTitle = "مطبخ السعادة • Morning Kitchen"
+        ),
+        VideoItem(
+            id = "v7",
+            title = "أجمل مشاهد الطيران الشراعي فوق جبال البحر الأبيض المتوسط 🪂",
+            description = "تجربة تحليق حر مذهلة وثوثيق بصري من منظور الصقر #مغامرة #سفر",
+            creatorName = "رحالة الصحراء",
+            creatorHandle = "@desert_wanderer",
+            creatorAvatarId = "av_traveler",
+            duration = "00:35",
+            viewsCount = 380000,
+            likesCount = 34200,
+            sharesCount = 2100,
+            orientation = VideoOrientation.VERTICAL,
+            category = "سفر",
+            timeAgo = "منذ 4 أيام",
+            visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
+            musicTitle = "رياح الحرية • Sky High"
+        ),
+        VideoItem(
+            id = "v8",
+            title = "إعداد إضاءة الـ RGB الاحترافية لغرفة الألعاب والبث المباشر 💡",
+            description = "توزيع الإضاءة الذكية لمظهر سينمائي مميز أثناء البث #تكنولوجيا #ألعاب",
+            creatorName = "جيمر زون",
+            creatorHandle = "@gamer_zone",
+            creatorAvatarId = "av_gamer",
+            duration = "00:40",
+            viewsCount = 165000,
+            likesCount = 15100,
+            sharesCount = 940,
+            orientation = VideoOrientation.VERTICAL,
+            category = "ألعاب",
+            timeAgo = "منذ 5 أيام",
+            visualStyle = MediaVisualStyle.GAMING_NEON,
+            musicTitle = "نيون جير • Cyber Gear"
+        ),
+        VideoItem(
+            id = "v9",
+            title = "كيف تصمم شعاراً احترافياً باستخدام الأشكال الهندسية البسيطة ✍️",
+            description = "خطوات مبسطة لابتكار هوية بصرية خالدة لأي مشروع تجاري #تصميم",
+            creatorName = "استوديو بيان",
+            creatorHandle = "@bayan_design",
+            creatorAvatarId = "av_badge",
+            duration = "00:28",
+            viewsCount = 112000,
+            likesCount = 9800,
+            sharesCount = 650,
+            orientation = VideoOrientation.VERTICAL,
+            category = "تصميم",
+            timeAgo = "منذ أسبوع",
+            visualStyle = MediaVisualStyle.DESIGN_GRID,
+            musicTitle = "إلهام البصريات • Creator Flow"
+        ),
+        VideoItem(
+            id = "v10",
+            title = "كواليس مونتاج الأفلام الوثائقية وتجميع اللقطات الصامتة 🎞️",
+            description = "كيف تدمج الصوت مع الحركة لإنتاج تأثير درامي مؤثر في قلوب المشاهدين #سينما",
+            creatorName = "نور الإبداع",
+            creatorHandle = "@noor_visuals",
+            creatorAvatarId = "av_director",
+            duration = "00:48",
+            viewsCount = 295000,
+            likesCount = 27600,
+            sharesCount = 1840,
+            orientation = VideoOrientation.VERTICAL,
+            category = "تقنية",
+            timeAgo = "منذ أسبوعين",
+            visualStyle = MediaVisualStyle.PODCAST_MIC,
+            musicTitle = "نبض السينما • Cinematic Pulse"
         )
     )
 

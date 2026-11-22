@@ -30,12 +30,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.MediaVisualStyle
 import com.example.model.UploadContentType
+import com.example.model.UserProfile
 import com.example.ui.camera.ProCameraStudioDialog
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.MediaSceneArtwork
@@ -73,6 +77,7 @@ import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun UploadStudioScreen(
+    userProfile: UserProfile,
     onPublish: (
         contentType: UploadContentType,
         title: String,
@@ -136,17 +141,81 @@ fun UploadStudioScreen(
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = "استوديو الرفع",
+                    text = "استوديو رفع الفيديوهات",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "اختر فيديو أو صورة أو صوّر بالكاميرا الاحترافية",
+                    text = "اختر فيديو أو صوّر بالكاميرا الاحترافية",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
+
+        // Isolated Points Badge Card on Upload Studio screen
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = primaryAccent.copy(alpha = 0.14f),
+            border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.40f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .testTag("upload_studio_points_badge")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(primaryAccent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "رصيد نقاط التفاعل",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${userProfile.points} نقطة مساهمة",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = primaryAccent
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = secondaryAccent.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        text = "+2 لكل مشاركة 🚀",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = secondaryAccent,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Focused Media Picker + Pro Camera Button Area
         Surface(
@@ -171,14 +240,12 @@ fun UploadStudioScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 if (capturedOrPickedUri != null) {
-                    val previewModifier = when (selectedType) {
-                        UploadContentType.VERTICAL_CLIP -> Modifier
+                    val previewModifier = if (selectedType == UploadContentType.VERTICAL_CLIP) {
+                        Modifier
                             .width(176.dp)
                             .aspectRatio(9f / 16f)
-                        UploadContentType.PHOTO_POST -> Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(4f / 3f)
-                        UploadContentType.HORIZONTAL_VIDEO -> Modifier
+                    } else {
+                        Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
                     }
@@ -191,7 +258,7 @@ fun UploadStudioScreen(
                         MediaSceneArtwork(
                             visualStyle = MediaVisualStyle.CUSTOM_URI,
                             mediaUriString = capturedOrPickedUri,
-                            isPlaying = selectedType != UploadContentType.PHOTO_POST,
+                            isPlaying = true,
                             modifier = Modifier.fillMaxSize()
                         )
                         IconButton(
@@ -221,7 +288,7 @@ fun UploadStudioScreen(
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
                             .clickable {
                                 mediaPicker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                                 )
                             },
                         contentAlignment = Alignment.Center
@@ -239,20 +306,20 @@ fun UploadStudioScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.PhotoLibrary,
-                                    contentDescription = "اختيار صورة أو فيديو",
+                                    imageVector = Icons.Filled.VideoLibrary,
+                                    contentDescription = "اختيار فيديو",
                                     tint = Color.White,
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "اضغط لاختيار فيديو أو صورة من الهاتف",
+                                text = "اضغط لاختيار فيديو من الهاتف",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "يتم التعرف تلقائياً على المقاس والوجهة المناسبة",
+                                text = "يتم التعرف تلقائياً على المقاس (أفقي للرئيسية أو طولي لـ clips)",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = secondaryAccent
                             )
@@ -261,7 +328,7 @@ fun UploadStudioScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                // Pick Media from device + Pro Camera (Photo & Video) button
+                // Pick Media from device + Pro Camera button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -269,7 +336,7 @@ fun UploadStudioScreen(
                     OutlinedButton(
                         onClick = {
                             mediaPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                             )
                         },
                         shape = RoundedCornerShape(14.dp),
@@ -278,9 +345,9 @@ fun UploadStudioScreen(
                             .height(48.dp)
                             .testTag("upload_pick_media_button")
                     ) {
-                        Icon(Icons.Filled.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.VideoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (capturedOrPickedUri == null) "اختيار ملف" else "تغيير")
+                        Text(if (capturedOrPickedUri == null) "اختيار فيديو" else "تغيير الفيديو")
                     }
 
                     Button(
@@ -292,7 +359,7 @@ fun UploadStudioScreen(
                             .height(48.dp)
                             .testTag("open_camera_studio_button")
                     ) {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Filled.Videocam, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("الكاميرا الاحترافية", color = Color.White, fontWeight = FontWeight.Bold)
                     }
@@ -313,79 +380,105 @@ fun UploadStudioScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "نوع المحتوى ووجهة النشر",
+                    text = "توجيه المحتوى التلقائي",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (capturedOrPickedUri != null) primaryAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (capturedOrPickedUri != null) primaryAccent.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("upload_auto_detected_type_banner")
                 ) {
-                    val uploadTypes = listOf(
-                        Triple(UploadContentType.HORIZONTAL_VIDEO, Icons.Filled.StayCurrentLandscape, "فيديو أفقي"),
-                        Triple(UploadContentType.VERTICAL_CLIP, Icons.Filled.StayCurrentPortrait, "clips"),
-                        Triple(UploadContentType.PHOTO_POST, Icons.Filled.CameraAlt, "صورة")
-                    )
-                    uploadTypes.forEach { (type, icon, label) ->
-                        val active = selectedType == type
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (active) primaryAccent else MaterialTheme.colorScheme.surfaceVariant,
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .testTag("upload_type_${type.name}")
-                                .clickable { selectedType = type }
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (capturedOrPickedUri != null) primaryAccent else MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
+                            Icon(
+                                imageVector = if (selectedType == UploadContentType.VERTICAL_CLIP)
+                                    Icons.Filled.StayCurrentPortrait
+                                else
+                                    Icons.Filled.StayCurrentLandscape,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 6.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    tint = if (active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    text = if (capturedOrPickedUri != null) {
+                                        if (selectedType == UploadContentType.VERTICAL_CLIP)
+                                            "النوع المحدد تلقائياً: مقطع طولي (clips)"
+                                        else
+                                            "النوع المحدد تلقائياً: فيديو أفقي عريض"
+                                    } else {
+                                        "التعرف التلقائي على أبعاد الفيديو"
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (capturedOrPickedUri != null) primaryAccent else MaterialTheme.colorScheme.onSurface
                                 )
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = secondaryAccent.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "تلقائي ✨",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = secondaryAccent,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
+
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = if (capturedOrPickedUri != null) {
+                                    if (selectedType == UploadContentType.VERTICAL_CLIP)
+                                        "سيتم النشر مباشرة في تبويب مقاطع clips"
+                                    else
+                                        "سيتم النشر مباشرة في الصفحة الرئيسية والمنشورات"
+                                } else {
+                                    "يتم فحص أبعاد الفيديو فور اختياره وتوجيهه للرئيسية أو clips تلقائياً"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = when (selectedType) {
-                        UploadContentType.VERTICAL_CLIP -> "سيتم نشر المقطع العمودي في قسم clips"
-                        UploadContentType.PHOTO_POST -> "سيتم نشر الصورة في قسم المنشورات"
-                        UploadContentType.HORIZONTAL_VIDEO -> "سيتم نشر الفيديو الأفقي في الصفحة الرئيسية"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = secondaryAccent,
-                    fontWeight = FontWeight.SemiBold
-                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text(if (selectedType == UploadContentType.PHOTO_POST) "عنوان المنشور" else "عنوان الفيديو") },
-                    placeholder = { Text("اكتب عنواناً جذاباً…") },
+                    label = { Text("عنوان الفيديو") },
+                    placeholder = { Text("اكتب عنواناً جذاباً للفيديو…") },
                     singleLine = true,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -398,8 +491,8 @@ fun UploadStudioScreen(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("الوصف") },
-                    placeholder = { Text("أضف وصفاً يوضح المحتوى…") },
+                    label = { Text("وصف الفيديو") },
+                    placeholder = { Text("أضف وصفاً يوضح محتوى الفيديو…") },
                     minLines = 3,
                     maxLines = 5,
                     shape = RoundedCornerShape(16.dp),
@@ -412,10 +505,10 @@ fun UploadStudioScreen(
 
                 Button(
                     onClick = {
-                        val visualStyle = when (selectedType) {
-                            UploadContentType.VERTICAL_CLIP -> MediaVisualStyle.CYBER_CITY
-                            UploadContentType.PHOTO_POST -> MediaVisualStyle.STUDIO_PHOTO
-                            UploadContentType.HORIZONTAL_VIDEO -> MediaVisualStyle.STUDIO_PHOTO
+                        val visualStyle = if (selectedType == UploadContentType.VERTICAL_CLIP) {
+                            MediaVisualStyle.CYBER_CITY
+                        } else {
+                            MediaVisualStyle.STUDIO_PHOTO
                         }
                         onPublish(
                             selectedType,
@@ -440,11 +533,10 @@ fun UploadStudioScreen(
                     Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = when (selectedType) {
-                            UploadContentType.VERTICAL_CLIP -> "نشر الفيديو في clips"
-                            UploadContentType.PHOTO_POST -> "نشر الصورة في المنشورات"
-                            UploadContentType.HORIZONTAL_VIDEO -> "نشر في الصفحة الرئيسية"
-                        },
+                        text = if (selectedType == UploadContentType.VERTICAL_CLIP)
+                            "نشر الفيديو في clips"
+                        else
+                            "نشر في الصفحة الرئيسية",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -456,12 +548,10 @@ fun UploadStudioScreen(
 
     if (showCameraDialog) {
         ProCameraStudioDialog(
-            onMediaCaptured = { uri, isPhoto ->
+            onMediaCaptured = { uri, _ ->
                 capturedOrPickedUri = uri
-                selectedType = when {
-                    isPhoto -> UploadContentType.PHOTO_POST
-                    uri != null -> detectMediaContentType(context, Uri.parse(uri))
-                    else -> UploadContentType.VERTICAL_CLIP
+                if (uri != null) {
+                    selectedType = detectMediaContentType(context, Uri.parse(uri))
                 }
                 showCameraDialog = false
             },
@@ -471,17 +561,6 @@ fun UploadStudioScreen(
 }
 
 private fun detectMediaContentType(context: Context, uri: Uri): UploadContentType {
-    val uriStr = uri.toString()
-    val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
-    if (mime?.startsWith("image/") == true ||
-        uriStr.endsWith(".jpg", ignoreCase = true) ||
-        uriStr.endsWith(".jpeg", ignoreCase = true) ||
-        uriStr.endsWith(".png", ignoreCase = true) ||
-        uriStr.endsWith(".webp", ignoreCase = true)
-    ) {
-        return UploadContentType.PHOTO_POST
-    }
-
     return runCatching {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(context, uri)

@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,8 +63,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -148,7 +153,7 @@ fun HomeStoriesStrip(
             item(key = "own_story_circle") {
                 OwnStoryCircleItem(
                     userAvatar = getAvatarPreset(userProfile.avatarPresetId),
-                    hasOwnStory = ownStory != null && ownStory.slides.isNotEmpty(),
+                    slidesCount = ownStory?.slides?.size ?: 0,
                     isViewed = ownStory?.isViewed == true,
                     onClickAvatar = {
                         if (ownStory != null && ownStory.slides.isNotEmpty()) {
@@ -176,13 +181,14 @@ fun HomeStoriesStrip(
 @Composable
 private fun OwnStoryCircleItem(
     userAvatar: AvatarPreset,
-    hasOwnStory: Boolean,
+    slidesCount: Int,
     isViewed: Boolean,
     onClickAvatar: () -> Unit,
     onClickAddBadge: () -> Unit
 ) {
     val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
     val secondaryAccent = MaterialTheme.colorScheme.secondary
+    val hasOwnStory = slidesCount > 0
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -194,39 +200,24 @@ private fun OwnStoryCircleItem(
             modifier = Modifier.size(70.dp),
             contentAlignment = Alignment.Center
         ) {
-            val ringModifier = if (hasOwnStory && !isViewed) {
-                Modifier.border(
-                    width = 2.5.dp,
-                    brush = Brush.linearGradient(
-                        listOf(actionAccent, MaterialTheme.colorScheme.tertiary, secondaryAccent)
-                    ),
-                    shape = CircleShape
-                )
-            } else if (hasOwnStory) {
-                Modifier.border(
-                    width = 1.5.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-                    shape = CircleShape
-                )
-            } else {
-                Modifier.border(
-                    width = 1.5.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    shape = CircleShape
-                )
-            }
-
             Box(
                 modifier = Modifier
                     .size(66.dp)
                     .clip(CircleShape)
-                    .then(ringModifier)
-                    .padding(4.dp)
-                    .clip(CircleShape)
                     .clickable(onClick = onClickAvatar),
                 contentAlignment = Alignment.Center
             ) {
-                HighQualityAvatarView(preset = userAvatar, size = 58.dp)
+                SegmentedStoryRing(
+                    segmentCount = if (hasOwnStory) slidesCount else 1,
+                    isViewed = isViewed || !hasOwnStory,
+                    ringBrush = Brush.linearGradient(
+                        listOf(actionAccent, MaterialTheme.colorScheme.tertiary, secondaryAccent)
+                    ),
+                    mutedColor = MaterialTheme.colorScheme.outline.copy(alpha = if (hasOwnStory) 0.55f else 0.4f),
+                    strokeWidthDp = if (hasOwnStory && !isViewed) 2.6f else 1.6f,
+                    modifier = Modifier.fillMaxSize()
+                )
+                HighQualityAvatarView(preset = userAvatar, size = 56.dp)
             }
 
             // Quick "+" badge at bottom-end (bottom-left in RTL) to add a temporary story anytime
@@ -290,59 +281,27 @@ private fun CreatorStoryCircleItem(
             modifier = Modifier.size(70.dp),
             contentAlignment = Alignment.Center
         ) {
-            val ringModifier = if (!storyGroup.isViewed) {
-                Modifier.border(
-                    width = 2.5.dp,
-                    brush = Brush.linearGradient(
+            Box(
+                modifier = Modifier
+                    .size(66.dp)
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                SegmentedStoryRing(
+                    segmentCount = storyGroup.slides.size.coerceAtLeast(1),
+                    isViewed = storyGroup.isViewed,
+                    ringBrush = Brush.linearGradient(
                         listOf(
                             actionAccent,
                             MaterialTheme.colorScheme.tertiary,
                             secondaryAccent
                         )
                     ),
-                    shape = CircleShape
+                    mutedColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.48f),
+                    strokeWidthDp = if (!storyGroup.isViewed) 2.6f else 1.6f,
+                    modifier = Modifier.fillMaxSize()
                 )
-            } else {
-                Modifier.border(
-                    width = 1.5.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                    shape = CircleShape
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(66.dp)
-                    .clip(CircleShape)
-                    .then(ringModifier)
-                    .padding(4.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                HighQualityAvatarView(preset = avatar, size = 58.dp)
-            }
-
-            if (storyGroup.slides.size > 1) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(1.5.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (storyGroup.isViewed) MaterialTheme.colorScheme.surfaceVariant
-                            else secondaryAccent
-                        )
-                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                ) {
-                    Text(
-                        text = "${storyGroup.slides.size}",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (storyGroup.isViewed) MaterialTheme.colorScheme.onSurfaceVariant else Color.White
-                    )
-                }
+                HighQualityAvatarView(preset = avatar, size = 56.dp)
             }
         }
         Spacer(modifier = Modifier.height(5.dp))
@@ -356,6 +315,83 @@ private fun CreatorStoryCircleItem(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+private fun SegmentedStoryRing(
+    segmentCount: Int,
+    isViewed: Boolean,
+    ringBrush: Brush,
+    mutedColor: Color,
+    strokeWidthDp: Float,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val count = segmentCount.coerceAtLeast(1)
+        val strokePx = strokeWidthDp.dp.toPx()
+        val inset = strokePx / 2f + 1.dp.toPx()
+        val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+        val topLeft = Offset(inset, inset)
+        val strokeStyle = Stroke(width = strokePx, cap = StrokeCap.Round)
+
+        if (count == 1) {
+            if (isViewed) {
+                drawArc(
+                    color = mutedColor,
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = strokeStyle
+                )
+            } else {
+                drawArc(
+                    brush = ringBrush,
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = strokeStyle
+                )
+            }
+        } else {
+            // Divide 360 degrees into `count` equal segments separated by crisp gaps
+            val gapDegrees = when {
+                count == 2 -> 18f
+                count <= 4 -> 14f
+                else -> 10f
+            }
+            val totalGap = gapDegrees * count
+            val sweepPerSegment = ((360f - totalGap) / count).coerceAtLeast(8f)
+            val step = 360f / count
+            for (i in 0 until count) {
+                val startAngle = -90f + i * step + (gapDegrees / 2f)
+                if (isViewed) {
+                    drawArc(
+                        color = mutedColor,
+                        startAngle = startAngle,
+                        sweepAngle = sweepPerSegment,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = strokeStyle
+                    )
+                } else {
+                    drawArc(
+                        brush = ringBrush,
+                        startAngle = startAngle,
+                        sweepAngle = sweepPerSegment,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = strokeStyle
+                    )
+                }
+            }
+        }
     }
 }
 

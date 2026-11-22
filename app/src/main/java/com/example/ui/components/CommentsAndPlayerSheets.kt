@@ -122,404 +122,268 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.model.AvatarPreset
 import com.example.model.CommentItem
+import com.example.model.MediaVisualStyle
+import com.example.model.PostItem
 import com.example.model.VideoItem
 import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
-
-private enum class CommentsSheetMode {
-    READ_LIST,
-    ADD_COMMENT
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommentsBottomSheet(
     comments: List<CommentItem>,
+    targetPost: PostItem? = null,
     startInAddMode: Boolean = false,
     getAvatarPreset: (String) -> AvatarPreset,
     onAddComment: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var mode by remember(startInAddMode) {
-        mutableStateOf(
-            if (startInAddMode) CommentsSheetMode.ADD_COMMENT
-            else CommentsSheetMode.READ_LIST
-        )
-    }
     var inputText by remember { mutableStateOf("") }
     val accent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(startInAddMode) {
+        if (startInAddMode) {
+            delay(140L)
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surfaceContainer
     ) {
-        AnimatedContent(
-            targetState = mode,
-            transitionSpec = {
-                if (targetState == CommentsSheetMode.ADD_COMMENT) {
-                    (fadeIn(tween(200)) + slideInHorizontally { -it / 4 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally { it / 4 })
-                } else {
-                    (fadeIn(tween(200)) + slideInHorizontally { it / 4 }) togetherWith
-                        (fadeOut(tween(150)) + slideOutHorizontally { -it / 4 })
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 16.dp)
+        ) {
+            // Top sheet title
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "التعليقات (${comments.size})",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-            },
-            label = "comments_sheet_mode_transition"
-        ) { currentMode ->
-            if (currentMode == CommentsSheetMode.READ_LIST) {
-                // Dedicated Comments Reading List Mode (no inline input field)
-                Column(
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
+                }
+            }
+
+            // When opening comments from a Post, display the Post preview at the top
+            if (targetPost != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(0.9.dp, accent.copy(alpha = 0.35f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 18.dp)
-                        .testTag("comments_read_list_view")
+                        .testTag("comments_post_preview_${targetPost.id}")
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Text(
-                                text = "التعليقات (${comments.size})",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = accent.copy(alpha = 0.14f)
-                            ) {
-                                Text(
-                                    text = "قائمة القراءة",
-                                    color = accent,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (comments.isEmpty()) {
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 24.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ChatBubbleOutline,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(34.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "لا توجد تعليقات حتى الآن",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "كن أول من يضيف رأيه في قائمة التعليقات!",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 180.dp, max = 420.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(comments, key = { it.id }) { comment ->
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
-                                    border = BorderStroke(
-                                        0.6.dp,
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.Top
-                                    ) {
-                                        HighQualityAvatarView(
-                                            preset = getAvatarPreset(comment.avatarPresetId),
-                                            size = 40.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = comment.authorName,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                                Text(
-                                                    text = comment.timeAgo,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                text = comment.text,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Distinct trigger button (NOT an open text input) to switch to Add Comment view
-                    Surface(
-                        shape = RoundedCornerShape(24.dp),
-                        color = accent.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, accent.copy(alpha = 0.38f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 52.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .testTag("open_add_comment_composer")
-                            .clickable { mode = CommentsSheetMode.ADD_COMMENT }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Edit,
-                                    contentDescription = null,
-                                    tint = accent,
-                                    modifier = Modifier.size(20.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                HighQualityAvatarView(
+                                    preset = getAvatarPreset(targetPost.authorAvatarId),
+                                    size = 30.dp
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = targetPost.authorName,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = targetPost.timeAgo,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = accent.copy(alpha = 0.14f)
+                                ) {
+                                    Text(
+                                        text = "المنشور",
+                                        color = accent,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                            if (targetPost.content.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "اضغط لإضافة تعليق جديد…",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = targetPost.content,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = accent
+                        }
+                        if (targetPost.visualStyle != null || !targetPost.mediaUriString.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(62.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                             ) {
-                                Text(
-                                    text = "إضافة تعليق",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                MediaSceneArtwork(
+                                    visualStyle = targetPost.visualStyle ?: MediaVisualStyle.STUDIO_PHOTO,
+                                    mediaUriString = targetPost.mediaUriString,
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Comments list
+            if (comments.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "كن أول من يترك تعليقاً جميلاً!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
-                // Dedicated Add Comment Composer View
-                val focusRequester = remember { FocusRequester() }
-                val quickPhrases = remember {
-                    listOf(
-                        "محتوى رائع 👏",
-                        "تصوير احترافي 🎬",
-                        "استمر يا مبدع 🔥",
-                        "مفيد جداً ✨"
-                    )
-                }
-
-                BackHandler {
-                    mode = CommentsSheetMode.READ_LIST
-                }
-
-                LaunchedEffect(Unit) {
-                    delay(140L)
-                    runCatching { focusRequester.requestFocus() }
-                }
-
-                Column(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 20.dp)
-                        .testTag("comments_add_composer_view")
+                        .heightIn(min = 120.dp, max = if (targetPost != null) 280.dp else 340.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            IconButton(
-                                onClick = { mode = CommentsSheetMode.READ_LIST },
-                                modifier = Modifier.testTag("back_to_comments_list")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "العودة لقائمة التعليقات"
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "إضافة تعليق جديد",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "سيظهر تعليقك في قائمة التعليقات فور نشره",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Filled.Close, contentDescription = "إغلاق التعليقات")
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Quick suggestion chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        quickPhrases.forEach { phrase ->
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                                border = BorderStroke(
-                                    0.75.dp,
-                                    accent.copy(alpha = 0.30f)
-                                ),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .clickable {
-                                        inputText = if (inputText.isBlank()) phrase else "${inputText.trimEnd()} $phrase"
-                                    }
-                            ) {
-                                Text(
-                                    text = phrase,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        placeholder = { Text("اكتب تعليقك بوضوح هنا…") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester)
-                            .testTag("comment_input_field"),
-                        shape = RoundedCornerShape(18.dp),
-                        minLines = 3,
-                        maxLines = 5
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = { mode = CommentsSheetMode.READ_LIST },
-                            modifier = Modifier.height(48.dp)
-                        ) {
-                            Text("قراءة التعليقات")
-                        }
-
-                        Button(
-                            onClick = {
-                                if (inputText.isNotBlank()) {
-                                    onAddComment(inputText)
-                                    inputText = ""
-                                    mode = CommentsSheetMode.READ_LIST
-                                }
-                            },
-                            enabled = inputText.isNotBlank(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = accent,
-                                contentColor = Color.White
+                    items(comments, key = { it.id }) { comment ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+                            border = BorderStroke(
+                                0.6.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
                             ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("send_comment_button")
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "نشر التعليق",
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                HighQualityAvatarView(
+                                    preset = getAvatarPreset(comment.avatarPresetId),
+                                    size = 38.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = comment.authorName,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = comment.timeAgo,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = comment.text,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Always-visible comment writing bar right at the bottom
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("اكتب تعليقك هنا…") },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester)
+                        .testTag("comment_input_field"),
+                    shape = RoundedCornerShape(28.dp),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = accent,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("send_comment_button")
+                        .clickable {
+                            if (inputText.isNotBlank()) {
+                                onAddComment(inputText)
+                                inputText = ""
+                            }
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "إرسال التعليق",
+                            tint = Color.White
+                        )
                     }
                 }
             }
@@ -931,11 +795,11 @@ fun HorizontalVideoPlayerSheet(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 1. Reading Comments Section + separate Add Comment trigger
+                    // 1. Inline Comments Section with immediate writing bar
                     ExpandedWatchCommentsSection(
                         comments = video.comments,
                         getAvatarPreset = getAvatarPreset,
-                        onOpenAddComment = onOpenAddComment,
+                        onAddComment = onAddComment,
                         onOpenAllComments = onOpenComments
                     )
 
@@ -1495,9 +1359,10 @@ private fun VideoDetailsAndActionsColumn(
 private fun ExpandedWatchCommentsSection(
     comments: List<CommentItem>,
     getAvatarPreset: (String) -> AvatarPreset,
-    onOpenAddComment: () -> Unit,
+    onAddComment: (String) -> Unit,
     onOpenAllComments: () -> Unit
 ) {
+    var commentDraft by remember { mutableStateOf("") }
     val isDark = MaterialTheme.colorScheme.background.red < 0.25f
     val commentAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
 
@@ -1519,7 +1384,7 @@ private fun ExpandedWatchCommentsSection(
                 color = if (isDark) Color.White else MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "قراءة الكل",
+                text = "عرض الكل",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = commentAccent,
@@ -1532,7 +1397,48 @@ private fun ExpandedWatchCommentsSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Reading-only preview list (tapping opens full Reading List)
+        // Always-available inline comment writing bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = commentDraft,
+                onValueChange = { commentDraft = it },
+                placeholder = { Text("أضف تعليقاً...") },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("expanded_inline_comment_input"),
+                shape = RoundedCornerShape(26.dp),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Surface(
+                shape = CircleShape,
+                color = commentAccent,
+                modifier = Modifier
+                    .size(46.dp)
+                    .testTag("expanded_inline_send_comment")
+                    .clickable {
+                        if (commentDraft.isNotBlank()) {
+                            onAddComment(commentDraft)
+                            commentDraft = ""
+                        }
+                    }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "إرسال التعليق",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         if (comments.isEmpty()) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
@@ -1542,7 +1448,7 @@ private fun ExpandedWatchCommentsSection(
                     .clickable(onClick = onOpenAllComments)
             ) {
                 Text(
-                    text = "لا توجد تعليقات حتى الآن، اضغط لفتح التعليقات.",
+                    text = "لا توجد تعليقات حتى الآن، كن أول من يشارك رأيه!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(14.dp)
@@ -1589,53 +1495,6 @@ private fun ExpandedWatchCommentsSection(
                         }
                     }
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Separate distinct button to open Add Comment Composer (different UI from reading list)
-        Surface(
-            shape = RoundedCornerShape(22.dp),
-            color = commentAccent.copy(alpha = 0.12f),
-            border = BorderStroke(0.9.dp, commentAccent.copy(alpha = 0.35f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .testTag("expanded_open_add_comment_button")
-                .clickable(onClick = onOpenAddComment)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = null,
-                        tint = commentAccent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = "اضغط لإضافة تعليق…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                Text(
-                    text = "كتابة",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = commentAccent
-                )
             }
         }
     }
