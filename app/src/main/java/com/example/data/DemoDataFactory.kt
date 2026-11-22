@@ -59,7 +59,7 @@ object DemoDataFactory {
         ),
         AvatarPreset(
             id = "av_cool",
-            nameAr = "ستار كلاسيك",
+            nameAr = "مظهر كلاسيكي",
             categoryAr = "لايف ستايل",
             primaryColor = Color(0xFF1E1B4B),
             secondaryColor = Color(0xFF818CF8),
@@ -378,6 +378,19 @@ object DemoDataFactory {
         )
     )
 
+    val demoClipVideoUrls: List<String> = listOf(
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackSeeTheWorld.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
+        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4"
+    )
+
     val initialVerticalClips: List<VideoItem> = listOf(
         VideoItem(
             id = "v1",
@@ -395,6 +408,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ ساعة",
             visualStyle = MediaVisualStyle.CYBER_CITY,
+            mediaUriString = demoClipVideoUrls[0],
             isMine = true,
             musicTitle = "إيقاع ليلي هادئ • Neon Drift",
             comments = listOf(
@@ -417,6 +431,7 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ 3 ساعات",
             visualStyle = MediaVisualStyle.TECH_WAVE,
+            mediaUriString = demoClipVideoUrls[1],
             musicTitle = "صوت الانتقال الحركي • Studio Beat"
         ),
         VideoItem(
@@ -434,6 +449,7 @@ object DemoDataFactory {
             category = "ألعاب",
             timeAgo = "منذ 6 ساعات",
             visualStyle = MediaVisualStyle.GAMING_NEON,
+            mediaUriString = demoClipVideoUrls[2],
             musicTitle = "حماس البداية • Cyber Pulse"
         ),
         VideoItem(
@@ -451,6 +467,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ يوم",
             visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
+            mediaUriString = demoClipVideoUrls[3],
             isMine = true,
             musicTitle = "نسيم الغروب • Acoustic Horizon"
         ),
@@ -469,6 +486,7 @@ object DemoDataFactory {
             category = "تصميم",
             timeAgo = "منذ يومين",
             visualStyle = MediaVisualStyle.DESIGN_GRID,
+            mediaUriString = demoClipVideoUrls[4],
             musicTitle = "Lo-Fi التصميم • Chill Vibes"
         ),
         VideoItem(
@@ -486,6 +504,7 @@ object DemoDataFactory {
             category = "طبخ",
             timeAgo = "منذ 3 أيام",
             visualStyle = MediaVisualStyle.COOKING_WARM,
+            mediaUriString = demoClipVideoUrls[5],
             musicTitle = "مطبخ السعادة • Morning Kitchen"
         ),
         VideoItem(
@@ -503,6 +522,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ 4 أيام",
             visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
+            mediaUriString = demoClipVideoUrls[6],
             musicTitle = "رياح الحرية • Sky High"
         ),
         VideoItem(
@@ -520,6 +540,7 @@ object DemoDataFactory {
             category = "ألعاب",
             timeAgo = "منذ 5 أيام",
             visualStyle = MediaVisualStyle.GAMING_NEON,
+            mediaUriString = demoClipVideoUrls[7],
             musicTitle = "نيون جير • Cyber Gear"
         ),
         VideoItem(
@@ -537,6 +558,7 @@ object DemoDataFactory {
             category = "تصميم",
             timeAgo = "منذ أسبوع",
             visualStyle = MediaVisualStyle.DESIGN_GRID,
+            mediaUriString = demoClipVideoUrls[8],
             musicTitle = "إلهام البصريات • Creator Flow"
         ),
         VideoItem(
@@ -554,6 +576,7 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ أسبوعين",
             visualStyle = MediaVisualStyle.PODCAST_MIC,
+            mediaUriString = demoClipVideoUrls[9],
             musicTitle = "نبض السينما • Cinematic Pulse"
         )
     )

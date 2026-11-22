@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StayCurrentLandscape
 import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -180,7 +179,7 @@ fun UploadStudioScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Star,
+                            imageVector = Icons.Filled.AutoAwesome,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)

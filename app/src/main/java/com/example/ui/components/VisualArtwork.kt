@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -483,6 +484,23 @@ fun MediaSceneArtwork(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit
                         )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0A0F16))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(36.dp),
+                                color = Color(0xFFFF2D55).copy(alpha = 0.6f),
+                                strokeWidth = 3.dp
+                            )
+                        }
                     }
                     if (isPlaying) {
                         key(mediaUriString) {

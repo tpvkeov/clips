@@ -4,8 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import com.example.viewmodel.ClipsViewModel
+import com.example.data.DemoDataFactory
 
 class ExampleUnitTest {
   @Test
@@ -57,5 +59,34 @@ class ExampleUnitTest {
     val stateAfterSecond = viewModel.uiState.value
     assertEquals(initialPoints + 2, stateAfterSecond.userProfile.points)
     assertEquals(false, stateAfterSecond.shareFeedbackEvent?.isNewPointsAwarded)
+  }
+
+  @Test
+  fun testDemoClipVideoUrlsAreTenAndAssignedToInitialClips() {
+    assertEquals(10, DemoDataFactory.demoClipVideoUrls.size)
+    assertEquals(10, DemoDataFactory.initialVerticalClips.size)
+
+    val viewModel = ClipsViewModel()
+    val clips = viewModel.uiState.value.verticalClips
+    assertEquals(10, clips.size)
+
+    for (i in 0 until 10) {
+      val url = DemoDataFactory.demoClipVideoUrls[i]
+      assertTrue("URL at $i should not be blank", url.isNotBlank())
+      assertTrue("URL at $i should be mp4", url.endsWith(".mp4", ignoreCase = true))
+      assertEquals("Clip at $i should match demo URL", url, clips[i].mediaUriString)
+    }
+  }
+
+  @Test
+  fun testNoStarInPresetNamesOrClips() {
+    for (preset in DemoDataFactory.avatarPresets) {
+      assertFalse("Preset name ${preset.nameAr} must not contain 'نجم'", preset.nameAr.contains("نجم"))
+      assertFalse("Preset name ${preset.nameAr} must not contain 'ستار'", preset.nameAr.contains("ستار"))
+    }
+    for (clip in DemoDataFactory.initialVerticalClips) {
+      assertFalse("Clip title ${clip.title} must not contain 'نجم'", clip.title.contains("نجم"))
+      assertFalse("Clip title ${clip.title} must not contain 'ستار'", clip.title.contains("ستار"))
+    }
   }
 }
