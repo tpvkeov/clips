@@ -315,12 +315,9 @@ class ClipsViewModel : ViewModel() {
         _uiState.update { it.copy(selectedClipId = null) }
     }
 
-    fun onScrollDelta(deltaY: Float) {
-        if (deltaY > 12f) {
-            setBottomBarVisible(false)
-        } else if (deltaY < -12f) {
-            setBottomBarVisible(true)
-        }
+    fun onScrollDelta(@Suppress("UNUSED_PARAMETER") deltaY: Float) {
+        // Keep the bottom navigation bar persistently visible across all tabs
+        setBottomBarVisible(true)
     }
 
     fun setBottomBarVisible(visible: Boolean) {
