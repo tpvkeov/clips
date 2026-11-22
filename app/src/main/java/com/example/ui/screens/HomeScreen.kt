@@ -277,21 +277,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 760.dp)
-                        .padding(horizontal = 16.dp),
-                    trailingContent = {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                text = "${videos.size} فيديو",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
+                        .padding(horizontal = 16.dp)
                 )
             }
 

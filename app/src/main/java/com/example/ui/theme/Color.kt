@@ -112,14 +112,14 @@ private val DarkOnSurface = Color(0xFFF3F6FA)
 private val DarkOnSurfaceVariant = Color(0xFFAAB4C4)
 private val DarkOutline = Color(0xFF313D50)
 
-private val LightBackground = Color(0xFFF6F8FA)
-private val LightSurface = Color(0xFFFFFFFF)
-private val LightSurfaceVariant = Color(0xFFEAF0F6)
-private val LightSurfaceContainer = Color(0xFFF1F5F9)
-private val LightSurfaceContainerHigh = Color(0xFFE4ECF4)
-private val LightOnSurface = Color(0xFF121822)
-private val LightOnSurfaceVariant = Color(0xFF526072)
-private val LightOutline = Color(0xFFCFD8E3)
+private val LightBackground = Color(0xFFEEF1F5)
+private val LightSurface = Color(0xFFF6F8FB)
+private val LightSurfaceVariant = Color(0xFFE6ECF3)
+private val LightSurfaceContainer = Color(0xFFEBEFF5)
+private val LightSurfaceContainerHigh = Color(0xFFE1E7EF)
+private val LightOnSurface = Color(0xFF1A212B)
+private val LightOnSurfaceVariant = Color(0xFF4E5A68)
+private val LightOutline = Color(0xFFC8D1DD)
 
 fun buildColorScheme(accent: AppThemeAccent, darkTheme: Boolean): ColorScheme {
     return if (darkTheme) {

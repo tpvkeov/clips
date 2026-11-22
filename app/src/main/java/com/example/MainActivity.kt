@@ -190,10 +190,12 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                     }
                 }
 
-                // Oval translucent floating pill navigation bar that hides/shows on scroll
+                // Oval translucent floating pill navigation bar that hides/shows on scroll.
+                // Hidden while the Clips reels are in full-screen (cinema) mode so the video fills the screen.
                 FloatingPillBottomBar(
                     currentTab = state.currentTab,
-                    visible = state.isBottomBarVisible,
+                    visible = state.isBottomBarVisible &&
+                        !(state.currentTab == MainTab.CLIPS && state.isClipsAltLayout),
                     onSelectTab = viewModel::selectTab,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
