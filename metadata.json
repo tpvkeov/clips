@@ -1,0 +1,6 @@
+{
+  "name": "clips",
+  "description": "تطبيق clips للفيديوهات الأفقية والريلز والمنشورات التفاعلية بواجهة عربية وتخصيص الألوان.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
