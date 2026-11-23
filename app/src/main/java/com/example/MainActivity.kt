@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -28,11 +29,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.DailyShareRewardStore
 import com.example.model.ClipsLayoutMode
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
@@ -63,7 +68,19 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
+fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
+    val appContext: Context = LocalContext.current.applicationContext
+    val viewModel: ClipsViewModel = providedViewModel ?: viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return ClipsViewModel(
+                    appContext = appContext,
+                    dailyShareStore = DailyShareRewardStore(appContext)
+                ) as T
+            }
+        }
+    )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 

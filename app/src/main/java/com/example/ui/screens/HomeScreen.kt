@@ -69,7 +69,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.model.AvatarPreset
 import com.example.model.UserProfile
 import com.example.model.UserStoryGroup
@@ -80,7 +79,6 @@ import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.FeaturedClipsCarouselSection
 import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.HomeStoriesStrip
-import com.example.ui.components.HorizontalVideosParallaxCarouselSection
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.cloudyLightHeader
@@ -280,7 +278,8 @@ fun HomeScreen(
                     trailingContent = {
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
                         ) {
                             Text(
                                 text = "${videos.size} فيديو",
@@ -328,7 +327,7 @@ fun HomeScreen(
                             onToggleSave = { onToggleSave(video.id) },
                             onShare = { onShareVideo(video.id) }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         VideoFeedDivider(isLight = isLight)
                     }
                 }
@@ -366,24 +365,8 @@ fun HomeScreen(
                             onToggleSave = { onToggleSave(video.id) },
                             onShare = { onShareVideo(video.id) }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         VideoFeedDivider(isLight = isLight)
-                    }
-                }
-
-                // Curated horizontal widescreen videos carousel with multi-layer 3D Parallax
-                if (videos.size >= 2 && searchQuery.isBlank()) {
-                    item(key = "horizontal_videos_parallax_shelf") {
-                        HorizontalVideosParallaxCarouselSection(
-                            videos = videos.reversed(),
-                            getAvatarPreset = getAvatarPreset,
-                            onOpenVideo = onOpenVideo,
-                            onOpenCreatorProfile = onOpenCreatorProfile,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .widthIn(max = 760.dp)
-                                .padding(top = 4.dp)
-                        )
                     }
                 }
             }
@@ -415,16 +398,16 @@ private fun HorizontalVideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(18.dp))
+                .aspectRatio(if (isFeaturedHero) 2.05f else 16f / 9f)
+                .clip(RoundedCornerShape(20.dp))
                 .border(
                     width = 1.dp,
                     color = if (isFeaturedHero) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.50f)
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
                     } else {
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.32f)
                     },
-                    shape = RoundedCornerShape(18.dp)
+                    shape = RoundedCornerShape(20.dp)
                 )
                 .clipToBounds()
         ) {
@@ -432,6 +415,7 @@ private fun HorizontalVideoCard(
                 visualStyle = video.visualStyle,
                 mediaUriString = video.mediaUriString,
                 avatarOverlay = overlayAvatar,
+                fillScreen = true,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -452,7 +436,8 @@ private fun HorizontalVideoCard(
                         Brush.verticalGradient(
                             listOf(
                                 Color.Transparent,
-                                Color(0xFF090E16).copy(alpha = 0.70f)
+                                Color(0xFF090E16).copy(alpha = 0.42f),
+                                Color(0xFF090E16).copy(alpha = 0.82f)
                             )
                         )
                     )
@@ -491,7 +476,7 @@ private fun HorizontalVideoCard(
                     .align(Alignment.BottomEnd)
                     .padding(10.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF0A1018).copy(alpha = 0.84f))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
@@ -527,10 +512,7 @@ private fun HorizontalVideoCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = video.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 15.5.sp,
-                        lineHeight = 21.sp
-                    ),
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 2,

@@ -477,29 +477,6 @@ private fun ReelPageItem(
                 )
         )
 
-        // Paused indicator
-        AnimatedVisibility(
-            visible = !isPlaying,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = "تشغيل المقطع",
-                    tint = Color.White,
-                    modifier = Modifier.size(44.dp)
-                )
-            }
-        }
-
         // Glowing heart burst with 3 rotating rings and floating hearts
         ClipsHeartGlowBurstEffect(
             visible = showDoubleTapHeart,

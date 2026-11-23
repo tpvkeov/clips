@@ -561,7 +561,9 @@ fun HorizontalVideoPlayerSheet(
                         video = video,
                         getAvatarPreset = getAvatarPreset,
                         isPageExpanded = false,
-                        isPlaying = isPlaying,
+                        // The fullscreen dialog owns the player while it is open;
+                        // pausing this one avoids two decoders on the same video.
+                        isPlaying = isPlaying && !isFullscreen,
                         progress = progress,
                         elapsedSeconds = elapsedSeconds,
                         totalSeconds = totalSeconds,
@@ -728,7 +730,8 @@ fun HorizontalVideoPlayerSheet(
                         video = video,
                         getAvatarPreset = getAvatarPreset,
                         isPageExpanded = true,
-                        isPlaying = isPlaying,
+                        // The fullscreen dialog owns the player while it is open.
+                        isPlaying = isPlaying && !isFullscreen,
                         progress = progress,
                         elapsedSeconds = elapsedSeconds,
                         totalSeconds = totalSeconds,
@@ -1119,45 +1122,48 @@ private fun VideoViewportBox(
                     }
                 }
 
-                // Center transport controls (-10s, Play/Pause, +10s)
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    PlayerOverlayPillButton(
-                        icon = Icons.Filled.Replay10,
-                        contentDescription = "ترجيع 10 ثواني",
-                        onClick = { onSeekDelta(-10f) }
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        actionAccent.copy(alpha = 0.90f),
-                                        secondaryAccent.copy(alpha = 0.90f)
+                // Center transport controls: only while playing, so a paused
+                // video shows nothing in the middle of the screen.
+                if (isPlaying) {
+                    Row(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PlayerOverlayPillButton(
+                            icon = Icons.Filled.Replay10,
+                            contentDescription = "ترجيع 10 ثواني",
+                            onClick = { onSeekDelta(-10f) }
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            actionAccent.copy(alpha = 0.90f),
+                                            secondaryAccent.copy(alpha = 0.90f)
+                                        )
                                     )
                                 )
+                                .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+                                .clickable(onClick = onTogglePlay),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Pause,
+                                contentDescription = "إيقاف مؤقت",
+                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
                             )
-                            .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
-                            .clickable(onClick = onTogglePlay),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = if (isPlaying) "إيقاف مؤقت" else "تشغيل",
-                            tint = Color.White,
-                            modifier = Modifier.size(30.dp)
+                        }
+                        PlayerOverlayPillButton(
+                            icon = Icons.Filled.Forward10,
+                            contentDescription = "تقديم 10 ثواني",
+                            onClick = { onSeekDelta(10f) }
                         )
                     }
-                    PlayerOverlayPillButton(
-                        icon = Icons.Filled.Forward10,
-                        contentDescription = "تقديم 10 ثواني",
-                        onClick = { onSeekDelta(10f) }
-                    )
                 }
 
                 if (isPageExpanded) {
@@ -2092,47 +2098,49 @@ private fun FullscreenVideoPlayerDialog(
                                 }
                             }
 
-                            // Center Transport Controls
-                            Row(
-                                modifier = Modifier.align(Alignment.Center),
-                                horizontalArrangement = Arrangement.spacedBy(26.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                PlayerOverlayPillButton(
-                                    icon = Icons.Filled.Replay10,
-                                    contentDescription = "ترجيع 10 ثواني",
-                                    onClick = { onSeekDelta(-10f) },
-                                    buttonSize = 48.dp
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(68.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(
-                                                    fullAccent.copy(alpha = 0.92f),
-                                                    fullSecondary.copy(alpha = 0.92f)
+                            // Center Transport Controls: hidden while paused.
+                            if (isPlaying) {
+                                Row(
+                                    modifier = Modifier.align(Alignment.Center),
+                                    horizontalArrangement = Arrangement.spacedBy(26.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    PlayerOverlayPillButton(
+                                        icon = Icons.Filled.Replay10,
+                                        contentDescription = "ترجيع 10 ثواني",
+                                        onClick = { onSeekDelta(-10f) },
+                                        buttonSize = 48.dp
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(68.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(
+                                                        fullAccent.copy(alpha = 0.92f),
+                                                        fullSecondary.copy(alpha = 0.92f)
+                                                    )
                                                 )
                                             )
+                                            .border(1.5.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                                            .clickable(onClick = onTogglePlay),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Pause,
+                                            contentDescription = "إيقاف مؤقت",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(38.dp)
                                         )
-                                        .border(1.5.dp, Color.White.copy(alpha = 0.55f), CircleShape)
-                                        .clickable(onClick = onTogglePlay),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                        contentDescription = if (isPlaying) "إيقاف مؤقت" else "تشغيل",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(38.dp)
+                                    }
+                                    PlayerOverlayPillButton(
+                                        icon = Icons.Filled.Forward10,
+                                        contentDescription = "تقديم 10 ثواني",
+                                        onClick = { onSeekDelta(10f) },
+                                        buttonSize = 48.dp
                                     )
                                 }
-                                PlayerOverlayPillButton(
-                                    icon = Icons.Filled.Forward10,
-                                    contentDescription = "تقديم 10 ثواني",
-                                    onClick = { onSeekDelta(10f) },
-                                    buttonSize = 48.dp
-                                )
                             }
 
                             // Bottom INSIDE-THE-VIDEO Progress Bar & Quick Controls

@@ -1,7 +1,12 @@
 package com.example.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.DailyShareRewardState
+import com.example.data.DailyShareRewardStore
 import com.example.data.DemoDataFactory
+import com.example.data.DemoVideoCache
 import com.example.model.AvatarPreset
 import com.example.model.ClipsLayoutMode
 import com.example.model.CommentItem
@@ -24,6 +29,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 data class SaveFeedbackEvent(
@@ -33,7 +42,8 @@ data class SaveFeedbackEvent(
 
 data class ShareFeedbackEvent(
     val id: Long,
-    val isNewPointsAwarded: Boolean = true
+    val isNewPointsAwarded: Boolean = true,
+    val isDailyCapReached: Boolean = false
 )
 
 data class ClipsUiState(
@@ -60,7 +70,10 @@ data class ClipsUiState(
     val feedbackMessage: String? = null,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
-    val rewardedSharedContentIds: Set<String> = emptySet()
+    val rewardedSharedContentIds: Set<String> = emptySet(),
+    val rewardDayKey: String = "",
+    val rewardedSharedVideoIds: Set<String> = emptySet(),
+    val rewardedSharedPostIds: Set<String> = emptySet()
 ) {
     val activePlayerVideo: VideoItem?
         get() = activePlayerVideoId?.let { id ->
@@ -168,9 +181,46 @@ data class ClipsUiState(
     }
 }
 
-class ClipsViewModel : ViewModel() {
+class ClipsViewModel(
+    private val appContext: Context? = null,
+    private val dailyShareStore: DailyShareRewardStore? = null
+) : ViewModel() {
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
+
+    init {
+        dailyShareStore?.let { store ->
+            val saved = store.load()
+            _uiState.update {
+                it.copy(
+                    rewardDayKey = saved.dayKey,
+                    rewardedSharedVideoIds = saved.rewardedVideoIds,
+                    rewardedSharedPostIds = saved.rewardedPostIds
+                )
+            }
+        }
+
+        // Cache the first demo clips once, then swap their URIs to local files.
+        // If a download fails, resolve() keeps the original URL as a fallback.
+        appContext?.let { context ->
+            viewModelScope.launch {
+                DemoVideoCache.prefetch(context, DemoDataFactory.demoClipVideoUrls)
+                _uiState.update { state ->
+                    state.copy(
+                        verticalClips = state.verticalClips.map { clip ->
+                            val uri = clip.mediaUriString
+                            if (uri == null || !uri.startsWith("http", ignoreCase = true)) {
+                                clip
+                            } else {
+                                val local = DemoVideoCache.resolve(context, uri)
+                                if (local == uri) clip else clip.copy(mediaUriString = local)
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
 
     fun getAvatarPreset(id: String): AvatarPreset {
         return DemoDataFactory.avatarPresets.find { it.id == id }
@@ -476,25 +526,55 @@ class ClipsViewModel : ViewModel() {
         }
     }
 
+    private fun currentDayKey(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+    private fun refreshRewardDay(state: ClipsUiState): ClipsUiState {
+        val today = currentDayKey()
+        if (state.rewardDayKey == today) return state
+        val fresh = state.copy(
+            rewardDayKey = today,
+            rewardedSharedVideoIds = emptySet(),
+            rewardedSharedPostIds = emptySet()
+        )
+        dailyShareStore?.save(
+            DailyShareRewardState(today, emptySet(), emptySet())
+        )
+        return fresh
+    }
+
     fun shareVideo(videoId: String) {
-        _uiState.update { state ->
-            val isFirstShare = videoId !in state.rewardedSharedContentIds
-            val newPoints = if (isFirstShare) state.userProfile.points + 2 else state.userProfile.points
-            val newRewardedIds = if (isFirstShare) state.rewardedSharedContentIds + videoId else state.rewardedSharedContentIds
-            val updatedProfile = state.userProfile.copy(points = newPoints)
-            val nextEventId = System.currentTimeMillis()
-            state.copy(
-                userProfile = updatedProfile,
-                rewardedSharedContentIds = newRewardedIds,
+        _uiState.update { rawState ->
+            val state = refreshRewardDay(rawState)
+            val alreadyAwarded = videoId in state.rewardedSharedVideoIds
+            val capReached = state.rewardedSharedVideoIds.size >= 5
+            val award = !alreadyAwarded && !capReached
+            val rewardedIds = if (award) state.rewardedSharedVideoIds + videoId else state.rewardedSharedVideoIds
+
+            val next = state.copy(
+                userProfile = if (award) {
+                    state.userProfile.copy(points = state.userProfile.points + 2)
+                } else state.userProfile,
+                rewardedSharedContentIds = if (award) state.rewardedSharedContentIds + videoId
+                                           else state.rewardedSharedContentIds,
+                rewardedSharedVideoIds = rewardedIds,
                 horizontalVideos = state.horizontalVideos.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
                 verticalClips = state.verticalClips.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                shareFeedbackEvent = ShareFeedbackEvent(nextEventId, isNewPointsAwarded = isFirstShare),
+                shareFeedbackEvent = ShareFeedbackEvent(
+                    id = System.currentTimeMillis(),
+                    isNewPointsAwarded = award,
+                    isDailyCapReached = capReached && !alreadyAwarded
+                ),
                 feedbackMessage = null
             )
+            dailyShareStore?.save(
+                DailyShareRewardState(next.rewardDayKey, next.rewardedSharedVideoIds, next.rewardedSharedPostIds)
+            )
+            next
         }
     }
 
@@ -515,21 +595,34 @@ class ClipsViewModel : ViewModel() {
     }
 
     fun sharePost(postId: String) {
-        _uiState.update { state ->
-            val isFirstShare = postId !in state.rewardedSharedContentIds
-            val newPoints = if (isFirstShare) state.userProfile.points + 2 else state.userProfile.points
-            val newRewardedIds = if (isFirstShare) state.rewardedSharedContentIds + postId else state.rewardedSharedContentIds
-            val updatedProfile = state.userProfile.copy(points = newPoints)
-            val nextEventId = System.currentTimeMillis()
-            state.copy(
-                userProfile = updatedProfile,
-                rewardedSharedContentIds = newRewardedIds,
+        _uiState.update { rawState ->
+            val state = refreshRewardDay(rawState)
+            val alreadyAwarded = postId in state.rewardedSharedPostIds
+            val capReached = state.rewardedSharedPostIds.size >= 5
+            val award = !alreadyAwarded && !capReached
+            val rewardedIds = if (award) state.rewardedSharedPostIds + postId else state.rewardedSharedPostIds
+
+            val next = state.copy(
+                userProfile = if (award) {
+                    state.userProfile.copy(points = state.userProfile.points + 2)
+                } else state.userProfile,
+                rewardedSharedContentIds = if (award) state.rewardedSharedContentIds + postId
+                                           else state.rewardedSharedContentIds,
+                rewardedSharedPostIds = rewardedIds,
                 posts = state.posts.map {
                     if (it.id == postId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                shareFeedbackEvent = ShareFeedbackEvent(nextEventId, isNewPointsAwarded = isFirstShare),
+                shareFeedbackEvent = ShareFeedbackEvent(
+                    id = System.currentTimeMillis(),
+                    isNewPointsAwarded = award,
+                    isDailyCapReached = capReached && !alreadyAwarded
+                ),
                 feedbackMessage = null
             )
+            dailyShareStore?.save(
+                DailyShareRewardState(next.rewardDayKey, next.rewardedSharedVideoIds, next.rewardedSharedPostIds)
+            )
+            next
         }
     }
 

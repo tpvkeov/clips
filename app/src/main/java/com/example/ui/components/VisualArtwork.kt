@@ -97,6 +97,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
@@ -480,9 +483,10 @@ fun MediaSceneArtwork(
                         .background(Color(0xFF0A0F16)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (frameBitmap != null) {
+                    val poster = frameBitmap
+                    if (poster != null) {
                         Image(
-                            bitmap = frameBitmap!!.asImageBitmap(),
+                            bitmap = poster.asImageBitmap(),
                             contentDescription = "إطار الفيديو",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = if (fillScreen) ContentScale.Crop else ContentScale.Fit
@@ -538,10 +542,24 @@ fun MediaSceneArtwork(
                                 }
                             }
 
+                            val lifecycleOwner = LocalLifecycleOwner.current
+                            DisposableEffect(lifecycleOwner) {
+                                val observer = object : DefaultLifecycleObserver {
+                                    override fun onStop(owner: LifecycleOwner) {
+                                        runCatching { activePlayer?.pause() }
+                                    }
+                                }
+                                lifecycleOwner.lifecycle.addObserver(observer)
+                                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                            }
+
                             DisposableEffect(mediaUriString) {
                                 onDispose {
-                                    runCatching { activePlayer?.release() }
+                                    val player = activePlayer
                                     activePlayer = null
+                                    isPrepared = false
+                                    isVideoRendering = false
+                                    runCatching { player?.release() }
                                 }
                             }
 
@@ -558,6 +576,14 @@ fun MediaSceneArtwork(
                                                 width: Int,
                                                 height: Int
                                             ) {
+                                                // A previous surface/player may still be alive after a fast
+                                                // scroll, page change or rotation. Release it before starting
+                                                // another one so we never keep two decoders for one item.
+                                                runCatching { activePlayer?.release() }
+                                                runCatching { attachedSurface?.release() }
+                                                activePlayer = null
+                                                isPrepared = false
+                                                isVideoRendering = false
                                                 val surf = Surface(surfaceTexture)
                                                 attachedSurface = surf
                                                 val mp = MediaPlayer()
@@ -583,29 +609,39 @@ fun MediaSceneArtwork(
                                                         false
                                                     }
                                                     mp.setOnPreparedListener { preparedMp ->
-                                                        isPrepared = true
-                                                        videoSize = preparedMp.videoWidth to preparedMp.videoHeight
-                                                        applyTextureScaleTransform(
-                                                            this@apply,
-                                                            preparedMp.videoWidth,
-                                                            preparedMp.videoHeight,
-                                                            currentFillScreen
-                                                        )
-                                                        val vol = if (currentIsMuted) 0f else 1f
-                                                        runCatching { preparedMp.setVolume(vol, vol) }
-                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentSpeed != 1f) {
-                                                            runCatching {
+                                                        // The composable can be disposed while prepareAsync() is
+                                                        // in flight. Ignore callbacks from a player we no longer own.
+                                                        if (activePlayer !== preparedMp) return@setOnPreparedListener
+                                                        runCatching {
+                                                            val width = preparedMp.videoWidth
+                                                            val height = preparedMp.videoHeight
+                                                            videoSize = width to height
+                                                            applyTextureScaleTransform(
+                                                                this@apply,
+                                                                width,
+                                                                height,
+                                                                currentFillScreen
+                                                            )
+                                                            val vol = if (currentIsMuted) 0f else 1f
+                                                            preparedMp.setVolume(vol, vol)
+                                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentSpeed != 1f) {
                                                                 preparedMp.playbackParams =
                                                                     preparedMp.playbackParams.setSpeed(currentSpeed)
                                                             }
-                                                        }
-                                                        if (currentIsPlaying) {
-                                                            runCatching { preparedMp.start() }
-                                                            isVideoRendering = true
-                                                            alpha = 1f
+                                                            isPrepared = true
+                                                            if (currentIsPlaying) {
+                                                                preparedMp.start()
+                                                                isVideoRendering = true
+                                                                alpha = 1f
+                                                            }
+                                                        }.onFailure {
+                                                            isPrepared = false
+                                                            isVideoRendering = false
+                                                            alpha = 0f
                                                         }
                                                     }
                                                     mp.setOnErrorListener { errMp, _, _ ->
+                                                        if (activePlayer === errMp) activePlayer = null
                                                         isPrepared = false
                                                         isVideoRendering = false
                                                         alpha = 0f
@@ -1273,7 +1309,24 @@ private fun extractVideoFrameBitmap(context: Context, uriString: String): Bitmap
         } else {
             retriever.setDataSource(context, Uri.parse(uriString))
         }
-        retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+        val frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            ?: return null
+        // A full-resolution poster for every visible card is the easiest way to
+        // exhaust memory on low-end devices. Keep posters small; the TextureView
+        // renders the real video at full resolution when it is ready.
+        val maxDimension = 720
+        val longestSide = maxOf(frame.width, frame.height)
+        if (longestSide <= maxDimension) {
+            frame
+        } else {
+            val scale = maxDimension.toFloat() / longestSide.toFloat()
+            Bitmap.createScaledBitmap(
+                frame,
+                (frame.width * scale).toInt().coerceAtLeast(1),
+                (frame.height * scale).toInt().coerceAtLeast(1),
+                true
+            ).also { runCatching { frame.recycle() } }
+        }
     } catch (_: Throwable) {
         null
     } finally {

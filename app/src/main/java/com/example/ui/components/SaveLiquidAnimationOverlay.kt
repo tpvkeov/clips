@@ -817,6 +817,7 @@ fun ShareFeedbackOverlay(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             val isNewPoints = event?.isNewPointsAwarded ?: true
+                            val isDailyCapReached = event?.isDailyCapReached ?: false
 
                             Text(
                                 text = "شكرا لمشاركه ومساعده النموي بكل جميل ونحن نقدر ذلك ✨",
@@ -845,10 +846,11 @@ fun ShareFeedbackOverlay(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        text = if (isNewPoints)
-                                            "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
-                                        else
-                                            "تم نسخ الرابط بنجاح وبشكل جميل",
+                                        text = when {
+                                            isDailyCapReached -> "تم نسخ الرابط — اكتملت مكافآت اليوم، عد غداً ✨"
+                                            isNewPoints -> "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
+                                            else -> "تم نسخ الرابط بنجاح وبشكل جميل"
+                                        },
                                         color = primaryAccent,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
@@ -860,10 +862,11 @@ fun ShareFeedbackOverlay(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = if (isNewPoints)
-                                    "(+2 نقاط مساهمة في رصيدك) 🚀"
-                                else
-                                    "(تم احتساب نقاط هذا المحتوى مسبقاً — نقطة واحدة لكل فيديو) ✨",
+                                text = when {
+                                    isDailyCapReached -> "(الحد اليومي: 5 فيديوهات و5 منشورات) 🌙"
+                                    isNewPoints -> "(+2 نقاط مساهمة في رصيدك) 🚀"
+                                    else -> "(تم احتساب نقاط هذا المحتوى مسبقاً) ✨"
+                                },
                                 color = Color.White.copy(alpha = 0.65f),
                                 style = MaterialTheme.typography.labelSmall,
                                 textAlign = TextAlign.Center
