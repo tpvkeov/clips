@@ -229,7 +229,7 @@ fun AuthScreen(
                         text = if (isRegister) {
                             "حساب آمن مرتبط بجهازك، مع حماية من محاولات التسجيل المتكررة."
                         } else {
-                            "سجّل الدخول لتتمكن من الاقتراحات والبلاغات. المتابعة والإعجاب متاحة للجميع."
+                            "سجّل الدخول لتتمكن من الإعجاب والمتابعة والتعليق. الاقتراحات والبلاغات متاحة للجميع."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

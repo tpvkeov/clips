@@ -253,8 +253,15 @@ class ClipsViewModel(
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
 
-    /** Remembered so a guest can finish signing in and land on the blocked action. */
-    private var pendingReportTarget: ReportTarget? = null
+    /** Remembered so a guest can finish signing in and the blocked action is replayed. */
+    private var pendingEngagement: PendingEngagement? = null
+
+    private sealed interface PendingEngagement {
+        data class LikeVideo(val videoId: String) : PendingEngagement
+        data class LikePost(val postId: String) : PendingEngagement
+        data class FollowCreator(val handle: String) : PendingEngagement
+        data class AddComment(val target: CommentsTarget, val text: String) : PendingEngagement
+    }
 
     init {
         dailyShareStore?.let { store ->
@@ -552,6 +559,7 @@ class ClipsViewModel(
     }
 
     fun toggleFollowCreator(handle: String) {
+        if (!requireEngagementAuth(PendingEngagement.FollowCreator(handle))) return
         _uiState.update { state ->
             val nowFollowing = !state.followedCreatorHandles.contains(handle)
             val updated = if (nowFollowing) {
@@ -748,6 +756,7 @@ class ClipsViewModel(
     }
 
     fun toggleLikeVideo(videoId: String) {
+        if (!requireEngagementAuth(PendingEngagement.LikeVideo(videoId))) return
         _uiState.update { state ->
             state.copy(
                 horizontalVideos = state.horizontalVideos.map { video ->
@@ -873,6 +882,7 @@ class ClipsViewModel(
     }
 
     fun toggleLikePost(postId: String) {
+        if (!requireEngagementAuth(PendingEngagement.LikePost(postId))) return
         _uiState.update { state ->
             state.copy(
                 posts = state.posts.map { post ->
@@ -927,6 +937,7 @@ class ClipsViewModel(
     fun addComment(target: CommentsTarget, text: String) {
         val cleanText = text.trim()
         if (cleanText.isEmpty()) return
+        if (!requireEngagementAuth(PendingEngagement.AddComment(target, cleanText))) return
         val profile = _uiState.value.userProfile
         val newComment = CommentItem(
             id = "cmt_${UUID.randomUUID()}",
@@ -1314,7 +1325,7 @@ class ClipsViewModel(
     }
 
     fun closeAuthScreen() {
-        pendingReportTarget = null
+        pendingEngagement = null
         _uiState.update { state ->
             state.copy(
                 auth = state.auth.copy(
@@ -1345,14 +1356,11 @@ class ClipsViewModel(
         _uiState.update { it.copy(auth = it.auth.copy(password = value)) }
     }
 
-    /** Follow and like stay open to guests; only reports and suggestions require login. */
-    private fun requireAuth(
-        action: AuthPendingAction,
-        reportTarget: ReportTarget? = null
-    ): Boolean {
+    /** Likes, follows and comments need login; reports and suggestions stay open to guests. */
+    private fun requireEngagementAuth(action: PendingEngagement): Boolean {
         if (isSignedIn()) return true
-        pendingReportTarget = reportTarget
-        openAuthScreen(AuthMode.LOGIN, action)
+        pendingEngagement = action
+        openAuthScreen(AuthMode.LOGIN, AuthPendingAction.CONTINUE_ENGAGEMENT)
         return false
     }
 
@@ -1433,22 +1441,17 @@ class ClipsViewModel(
 
     private fun resumePendingAction() {
         val pendingAction = _uiState.value.auth.pendingAction
-        val target = pendingReportTarget
-        pendingReportTarget = null
+        val engagement = pendingEngagement
+        pendingEngagement = null
         _uiState.update { state ->
-            when (pendingAction) {
-                AuthPendingAction.OPEN_SUGGESTIONS -> state.copy(
-                    showSuggestions = true,
-                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
-                )
-                AuthPendingAction.OPEN_REPORT -> state.copy(
-                    reportTarget = target ?: state.reportTarget,
-                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
-                )
-                null -> state.copy(
-                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
-                )
-            }
+            state.copy(auth = state.auth.copy(showAuthScreen = false, pendingAction = null))
+        }
+        if (pendingAction != AuthPendingAction.CONTINUE_ENGAGEMENT || engagement == null) return
+        when (engagement) {
+            is PendingEngagement.LikeVideo -> toggleLikeVideo(engagement.videoId)
+            is PendingEngagement.LikePost -> toggleLikePost(engagement.postId)
+            is PendingEngagement.FollowCreator -> toggleFollowCreator(engagement.handle)
+            is PendingEngagement.AddComment -> addComment(engagement.target, engagement.text)
         }
     }
 
@@ -1461,7 +1464,7 @@ class ClipsViewModel(
 
     fun signOut() {
         authRepository?.signOut()
-        pendingReportTarget = null
+        pendingEngagement = null
         _uiState.update { state ->
             state.copy(
                 auth = state.auth.copy(
@@ -1481,7 +1484,6 @@ class ClipsViewModel(
     // -----------------------------------------------------------------
 
     fun openReport(target: ReportTarget) {
-        if (!requireAuth(AuthPendingAction.OPEN_REPORT, target)) return
         _uiState.update { it.copy(reportTarget = target) }
     }
 
@@ -1528,11 +1530,6 @@ class ClipsViewModel(
     }
 
     fun submitReport(reason: ReportReason, details: String) {
-        if (!isSignedIn()) {
-            val target = _uiState.value.reportTarget
-            requireAuth(AuthPendingAction.OPEN_REPORT, target)
-            return
-        }
         _uiState.update { state ->
             val target = state.reportTarget ?: return@update state
             val type = when (target) {
@@ -1569,7 +1566,6 @@ class ClipsViewModel(
     // -----------------------------------------------------------------
 
     fun openSuggestions() {
-        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
         _uiState.update { it.copy(showSuggestions = true) }
     }
 
@@ -1586,7 +1582,6 @@ class ClipsViewModel(
     }
 
     fun addSuggestion(title: String, description: String) {
-        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
         val cleanTitle = title.trim()
         if (cleanTitle.isBlank()) return
         _uiState.update { state ->
@@ -1607,7 +1602,6 @@ class ClipsViewModel(
     }
 
     fun toggleLikeSuggestion(id: String) {
-        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
         _uiState.update { state ->
             val next = state.copy(
                 suggestions = state.suggestions.map { suggestion ->
@@ -1626,7 +1620,6 @@ class ClipsViewModel(
     }
 
     fun addSuggestionComment(id: String, text: String) {
-        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
         val cleanText = text.trim()
         if (cleanText.isBlank()) return
         _uiState.update { state ->

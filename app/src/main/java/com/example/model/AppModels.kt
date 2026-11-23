@@ -326,7 +326,7 @@ data class DeviceIdentity(
         get() = "النواة: $kernelVersion\nالنطاق الأساسي: $basebandVersion\nالموديل: $model"
 }
 
-enum class AuthPendingAction { OPEN_SUGGESTIONS, OPEN_REPORT }
+enum class AuthPendingAction { CONTINUE_ENGAGEMENT }
 
 data class AuthUiState(
     val isLoggedIn: Boolean = false,
