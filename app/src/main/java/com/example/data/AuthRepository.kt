@@ -41,7 +41,7 @@ class AuthRepository(
         if (firebaseUser != null) {
             val uid = firebaseUser.uid
             if (securityStore.isUserBanned(uid)) {
-                securityStore.banDevice(DeviceIdentityCollector.collect(appContext).fingerprint)
+                securityStore.banDevice(DeviceIdentityCollector.collect(appContext))
                 return null
             }
             return AuthUser(
@@ -54,7 +54,7 @@ class AuthRepository(
         }
         val localSession = securityStore.loadSession() ?: return null
         if (securityStore.isUserBanned(localSession.uid)) {
-            securityStore.banDevice(DeviceIdentityCollector.collect(appContext).fingerprint)
+            securityStore.banDevice(DeviceIdentityCollector.collect(appContext))
             securityStore.clearSession()
             return null
         }
@@ -161,18 +161,18 @@ class AuthRepository(
     }
 
     fun isDeviceBanned(device: DeviceIdentity?): Boolean =
-        device != null && securityStore.isDeviceBanned(device.fingerprint)
+        device != null && securityStore.isDeviceBanned(device)
 
     /** Admin hook: banning an account also bans the device that signed in with it. */
     fun banAccountAndDevice(uid: String, device: DeviceIdentity? = null) {
         securityStore.banUser(uid)
         val identity = device ?: DeviceIdentityCollector.collect(appContext)
-        securityStore.banDevice(identity.fingerprint)
+        securityStore.banDevice(identity)
     }
 
     private fun enforceAccountBan(uid: String, context: Context): AuthAttempt? {
         if (!securityStore.isUserBanned(uid)) return null
-        securityStore.banDevice(DeviceIdentityCollector.collect(context).fingerprint)
+        securityStore.banDevice(DeviceIdentityCollector.collect(context))
         return AuthAttempt(
             errorAr = "تم حظر هذا الحساب، لذلك تم حظر التطبيق على هذا الجهاز بالكامل.",
             countAsFailure = false

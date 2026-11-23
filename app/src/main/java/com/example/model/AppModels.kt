@@ -314,10 +314,16 @@ data class DeviceIdentity(
     val macAddress: String,
     val ipAddress: String,
     val model: String,
-    val fingerprint: String
+    val kernelVersion: String = "غير متاح",
+    val basebandVersion: String = "غير متاح",
+    val fingerprint: String,
+    val extendedFingerprint: String = fingerprint
 ) {
     val displaySummaryAr: String
         get() = "الجهاز: ${deviceId.take(12)} • IP: $ipAddress • MAC: $macAddress"
+
+    val detailedSummaryAr: String
+        get() = "النواة: $kernelVersion\nالنطاق الأساسي: $basebandVersion\nالموديل: $model"
 }
 
 enum class AuthPendingAction { OPEN_SUGGESTIONS, OPEN_REPORT }

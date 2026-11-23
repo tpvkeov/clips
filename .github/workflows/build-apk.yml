@@ -16,21 +16,21 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6.3.0
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4.0.4
         with:
           packages: platform-tools
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6.4.1
         with:
           gradle-version: '9.3.1'
 
@@ -59,11 +59,23 @@ jobs:
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload app-debug.apk
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: clips-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Check APK size before publishing
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          MAX_BYTES=$((100 * 1024 * 1024))
+          APK_BYTES=$(stat -c%s "$APK")
+          APK_MB=$(awk -v bytes="$APK_BYTES" 'BEGIN { printf "%.2f", bytes / 1024 / 1024 }')
+          echo "APK size: ${APK_MB} MiB ($APK_BYTES bytes); limit: 100 MiB"
+          if [ "$APK_BYTES" -gt "$MAX_BYTES" ]; then
+            echo "::error::APK is ${APK_MB} MiB, above GitHub's 100 MiB file limit. The APK artifact 'clips-debug-apk' is still available, but publishing to app-debug.apk in clips-updates was skipped. Reduce native ABI filters or publish the APK as a GitHub Release asset."
+            exit 1
+          fi
 
       # The app repository stays private. Only the APK + update.json are
       # mirrored to a small public repo that the app can read anonymously.

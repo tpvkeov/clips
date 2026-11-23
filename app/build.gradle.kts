@@ -22,6 +22,13 @@ android {
     versionName = System.getenv("BUILD_VERSION_NAME") ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // FFmpegKit ships native libraries for four ABIs. Real Android phones only use
+    // these two, and keeping the x86/x86_64 binaries pushed the APK over GitHub's
+    // 100 MB file limit (137 MB with all ABIs).
+    ndk {
+      abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+    }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,

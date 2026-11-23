@@ -33,13 +33,27 @@ object DeviceIdentityCollector {
             .distinct()
             .joinToString(" ")
             .ifBlank { "Android device" }
+        val kernel = runCatching { System.getProperty("os.version") }
+            .getOrNull()
+            .takeUnless { it.isNullOrBlank() }
+            ?: "غير متاح"
+        val baseband = runCatching { Build.getRadioVersion() }
+            .getOrNull()
+            .takeUnless { it.isNullOrBlank() }
+            ?: "غير متاح"
 
+        // Stable fingerprint survives network and system updates; the extended
+        // one adds kernel/baseband so a ban can match either representation.
+        val stableSeed = "$androidId|$mac|$model"
         return DeviceIdentity(
             deviceId = androidId,
             macAddress = mac,
             ipAddress = ip,
             model = model,
-            fingerprint = sha256("$androidId|$mac|$model")
+            kernelVersion = kernel,
+            basebandVersion = baseband,
+            fingerprint = sha256(stableSeed),
+            extendedFingerprint = sha256("$stableSeed|$kernel|$baseband")
         )
     }
 

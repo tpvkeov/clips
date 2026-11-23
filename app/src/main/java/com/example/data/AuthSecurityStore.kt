@@ -3,6 +3,7 @@ package com.example.data
 import android.content.Context
 import androidx.core.content.edit
 import com.example.model.AuthUser
+import com.example.model.DeviceIdentity
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -87,6 +88,9 @@ class AuthSecurityStore(context: Context) {
     fun isDeviceBanned(fingerprint: String): Boolean =
         prefs.getStringSet(KEY_BANNED_DEVICES, emptySet()).orEmpty().contains(fingerprint)
 
+    fun isDeviceBanned(device: DeviceIdentity): Boolean =
+        isDeviceBanned(device.fingerprint) || isDeviceBanned(device.extendedFingerprint)
+
     fun banDevice(fingerprint: String) {
         if (fingerprint.isBlank()) return
         val updated = prefs.getStringSet(KEY_BANNED_DEVICES, emptySet()).orEmpty().toMutableSet()
@@ -94,10 +98,23 @@ class AuthSecurityStore(context: Context) {
         prefs.edit { putStringSet(KEY_BANNED_DEVICES, updated) }
     }
 
+    /** Store both fingerprints so the ban survives kernel/baseband changes after system updates. */
+    fun banDevice(device: DeviceIdentity) {
+        banDevice(device.fingerprint)
+        if (device.extendedFingerprint != device.fingerprint) {
+            banDevice(device.extendedFingerprint)
+        }
+    }
+
     fun unbanDevice(fingerprint: String) {
         val updated = prefs.getStringSet(KEY_BANNED_DEVICES, emptySet()).orEmpty().toMutableSet()
         updated.remove(fingerprint)
         prefs.edit { putStringSet(KEY_BANNED_DEVICES, updated) }
+    }
+
+    fun unbanDevice(device: DeviceIdentity) {
+        unbanDevice(device.fingerprint)
+        unbanDevice(device.extendedFingerprint)
     }
 
     fun isUserBanned(uid: String): Boolean =

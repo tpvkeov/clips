@@ -482,9 +482,10 @@ fun AuthScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "يتم تسجيل معرّف الجهاز وعنوان الشبكة عند كل تسجيل، ويُمنع الجهاز بالكامل إذا تم حظر حسابك.",
+                        text = "تحذير مهم: عند التسجيل يتم تسجيل معرّف الجهاز وعنوان الشبكة وإصدار النواة والنطاق الأساسي. أي حظر يُطبّق على الحساب يمنع الجهاز نهائيًا، ولا يمكن إلغاؤه إلا من المالك.",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold
                     )
                     AnimatedVisibility(visible = showDeviceInfo) {
                         Column {
@@ -497,7 +498,13 @@ fun AuthScreen(
                             state.device?.let { device ->
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "البصمة: ${device.fingerprint.take(24)}…",
+                                    text = device.detailedSummaryAr,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = accent
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "البصمة: ${device.fingerprint.take(24)}…\nبصمة النظام: ${device.extendedFingerprint.take(24)}…",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

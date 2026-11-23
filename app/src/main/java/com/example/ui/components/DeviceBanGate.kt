@@ -99,9 +99,10 @@ fun DeviceBanGate(
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "تم ربط الحساب المحظور بمعرّف هذا الجهاز، لذلك لا يمكن استخدام التطبيق عليه. استخدم جهازًا آخر أو تواصل مع الإدارة.",
+                text = "تحذير أمني: تم ربط الحساب المحظور بمعرّف الجهاز وعنوان الشبكة وإصدار النواة والنطاق الأساسي. هذا الجهاز محظور نهائيًا؛ أي محاولة لإنشاء حساب جديد عليه ستبقى محظورة ما دام الحظر مسجّلًا على الجهاز أو الخادم. استخدم جهازًا آخر أو تواصل مع الإدارة.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(20.dp))
@@ -119,7 +120,14 @@ fun DeviceBanGate(
                     auth.device?.let { device ->
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "البصمة: ${device.fingerprint}",
+                            text = device.detailedSummaryAr,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accent,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "البصمة: ${device.fingerprint}\nبصمة النظام: ${device.extendedFingerprint}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center

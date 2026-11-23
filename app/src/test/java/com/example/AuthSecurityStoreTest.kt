@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AuthSecurityStore
+import com.example.model.DeviceIdentity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -44,6 +45,28 @@ class AuthSecurityStoreTest {
         assertTrue(store.isDeviceBanned(fingerprint))
         store.unbanDevice(fingerprint)
         assertFalse(store.isDeviceBanned(fingerprint))
+    }
+
+    @Test
+    fun `device ban matches stable and extended fingerprints`() {
+        val store = AuthSecurityStore(ApplicationProvider.getApplicationContext<Context>())
+        val unique = System.nanoTime()
+        val device = DeviceIdentity(
+            deviceId = "device_$unique",
+            macAddress = "mac_$unique",
+            ipAddress = "192.0.2.1",
+            model = "Test Model",
+            fingerprint = "stable_$unique",
+            extendedFingerprint = "extended_$unique"
+        )
+
+        assertFalse(store.isDeviceBanned(device))
+        store.banDevice(device)
+        assertTrue(store.isDeviceBanned(device))
+        assertTrue(store.isDeviceBanned(device.fingerprint))
+        assertTrue(store.isDeviceBanned(device.extendedFingerprint))
+        store.unbanDevice(device)
+        assertFalse(store.isDeviceBanned(device))
     }
 
     private companion object {
