@@ -1,5 +1,11 @@
 package com.example.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,16 +31,23 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
@@ -50,6 +63,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -67,20 +81,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.R
-import com.example.data.DemoDataFactory
 import com.example.model.AvatarPreset
 import com.example.model.PostItem
 import com.example.model.UserProfile
@@ -93,6 +109,9 @@ import com.example.ui.theme.AppThemeAccent
 import com.example.ui.theme.ButtonColorTarget
 import com.example.ui.theme.ButtonSwatchPalette
 import com.example.ui.theme.CustomButtonColors
+import com.example.viewmodel.ProfileUpdate
+import java.io.File
+import java.io.IOException
 
 @Composable
 fun ProfileScreen(
@@ -114,7 +133,12 @@ fun ProfileScreen(
     onCheckForUpdates: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onJumpToClipsTab: () -> Unit,
-    onUpdateProfile: (name: String, bio: String, avatarPresetId: String) -> Unit,
+    onOpenSuggestions: () -> Unit,
+    isGuest: Boolean = false,
+    userEmail: String? = null,
+    onOpenAuth: () -> Unit = {},
+    onSignOut: () -> Unit = {},
+    onUpdateProfile: (ProfileUpdate) -> Unit,
     onScrollDelta: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -270,6 +294,43 @@ fun ProfileScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .clickable {
+                                    if (isGuest) onOpenAuth() else onSignOut()
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.AccountCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (isGuest) {
+                                        "وضع الضيف — اضغط للتسجيل"
+                                    } else {
+                                        "حساب: ${userEmail.orEmpty()} • اضغط لتسجيل الخروج"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -667,6 +728,62 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
+        // 3c. Feature suggestions board: add ideas, like and comment publicly
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("profile_suggestions_button")
+                        .clickable { onOpenSuggestions() }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Filled.Lightbulb,
+                                contentDescription = "اقتراحات التطوير",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "اقتراحات التطوير",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "شاركنا فكرتك، وصوّت على أفكار الآخرين",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
         // 4. Professional Uploaded Videos & Content Tabs
         item {
             TabRow(
@@ -788,8 +905,8 @@ fun ProfileScreen(
         EditProfileSheet(
             profile = userProfile,
             onDismiss = { showEditSheet = false },
-            onSave = { name, bio, avatarId ->
-                onUpdateProfile(name, bio, avatarId)
+            onSave = { update ->
+                onUpdateProfile(update)
                 showEditSheet = false
             }
         )
@@ -841,6 +958,7 @@ private fun ProfileVideoRowCard(
                 MediaSceneArtwork(
                     visualStyle = video.visualStyle,
                     mediaUriString = video.mediaUriString,
+                    mediaInfo = video.mediaInfo,
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -936,6 +1054,7 @@ private fun ProfileVerticalClipTile(
         MediaSceneArtwork(
             visualStyle = clip.visualStyle,
             mediaUriString = clip.mediaUriString,
+            mediaInfo = clip.mediaInfo,
             fillScreen = true,
             modifier = Modifier.fillMaxSize()
         )
@@ -987,17 +1106,56 @@ private fun EmptyProfileSection(message: String) {
     }
 }
 
+/** Copy the picked photo into app storage so it survives restarts and URI permission loss. */
+private fun savePickedAvatar(context: android.content.Context, source: Uri): String? = runCatching {
+    context.contentResolver.openInputStream(source)?.use { input ->
+        val original = BitmapFactory.decodeStream(input) ?: return@use null
+        val maxSide = 1080
+        val scale = minOf(1f, maxSide.toFloat() / maxOf(original.width, original.height))
+        val bitmap = if (scale < 1f) {
+            Bitmap.createScaledBitmap(
+                original,
+                maxOf(1, (original.width * scale).toInt()),
+                maxOf(1, (original.height * scale).toInt()),
+                true
+            )
+        } else original
+        val file = File(context.filesDir, "profile_avatar.jpg")
+        java.io.FileOutputStream(file).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)
+        }
+        Uri.fromFile(file).toString()
+    }
+}.getOrNull()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditProfileSheet(
     profile: UserProfile,
     onDismiss: () -> Unit,
-    onSave: (name: String, bio: String, avatarId: String) -> Unit
+    onSave: (ProfileUpdate) -> Unit
 ) {
+    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf(profile.name) }
     var bio by remember { mutableStateOf(profile.bio) }
-    var selectedAvatarId by remember { mutableStateOf(profile.avatarPresetId) }
+    var photoUri by remember { mutableStateOf(profile.avatarImageUri) }
+    var zoom by remember { mutableStateOf(profile.avatarImageZoom.coerceIn(1f, 2.5f)) }
+    var offsetX by remember { mutableStateOf(profile.avatarImageOffsetX.coerceIn(-0.3f, 0.3f)) }
+    var offsetY by remember { mutableStateOf(profile.avatarImageOffsetY.coerceIn(-0.3f, 0.3f)) }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { picked ->
+        if (picked != null) {
+            savePickedAvatar(context, picked)?.let { localUri ->
+                photoUri = localUri
+                zoom = 1f
+                offsetX = 0f
+                offsetY = 0f
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1007,6 +1165,7 @@ private fun EditProfileSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -1027,31 +1186,93 @@ private fun EditProfileSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "اختر أفاتار الحساب",
+                text = "صورة الحساب",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "ارفع صورة حقيقية من جهازك واختر القص المناسب لها — بدون أفاتار جاهز.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(DemoDataFactory.avatarPresets, key = { it.id }) { preset ->
-                    val active = preset.id == selectedAvatarId
-                    Box(
+            Box(
+                modifier = Modifier
+                    .size(116.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (photoUri != null) {
+                    AsyncImage(
+                        model = photoUri,
+                        contentDescription = "صورة حسابك",
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable { selectedAvatarId = preset.id }
-                            .then(
-                                if (active) Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                else Modifier
-                            )
-                            .padding(3.dp)
-                    ) {
-                        HighQualityAvatarView(preset = preset, size = 56.dp)
-                    }
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = zoom
+                                scaleY = zoom
+                                translationX = size.width * offsetX
+                                translationY = size.height * offsetY
+                            }
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(46.dp)
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = {
+                    photoPicker.launch(
+                        PickVisualMediaRequest(
+                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Filled.AddAPhoto, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (photoUri == null) "رفع صورة من الجهاز" else "تغيير الصورة")
+            }
+            if (photoUri != null) {
+                Text(
+                    text = "إزالة الصورة والعودة للشكل الافتراضي",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            photoUri = null
+                            zoom = 1f
+                            offsetX = 0f
+                            offsetY = 0f
+                        }
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("تكبير الصورة", style = MaterialTheme.typography.labelSmall)
+                Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 1f..2.5f)
+                Text("تحريك أفقي", style = MaterialTheme.typography.labelSmall)
+                Slider(value = offsetX, onValueChange = { offsetX = it }, valueRange = -0.3f..0.3f)
+                Text("تحريك عمودي", style = MaterialTheme.typography.labelSmall)
+                Slider(value = offsetY, onValueChange = { offsetY = it }, valueRange = -0.3f..0.3f)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -1080,7 +1301,18 @@ private fun EditProfileSheet(
                     Text("إلغاء")
                 }
                 Button(
-                    onClick = { onSave(name, bio, selectedAvatarId) },
+                    onClick = {
+                        onSave(
+                            ProfileUpdate(
+                                name = name,
+                                bio = bio,
+                                avatarImageUri = photoUri,
+                                avatarImageZoom = zoom,
+                                avatarImageOffsetX = offsetX,
+                                avatarImageOffsetY = offsetY
+                            )
+                        )
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(16.dp)

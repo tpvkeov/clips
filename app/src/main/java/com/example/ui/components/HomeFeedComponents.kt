@@ -350,6 +350,7 @@ fun FeaturedClipsCarouselSection(
                             MediaSceneArtwork(
                                 visualStyle = clip.visualStyle,
                                 mediaUriString = clip.mediaUriString,
+                                mediaInfo = clip.mediaInfo,
                                 fillScreen = true,
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -583,6 +584,7 @@ fun HorizontalVideosParallaxCarouselSection(
                                     MediaSceneArtwork(
                                         visualStyle = video.visualStyle,
                                         mediaUriString = video.mediaUriString,
+                                        mediaInfo = video.mediaInfo,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .graphicsLayer {

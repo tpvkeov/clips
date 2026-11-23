@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -107,7 +108,9 @@ import com.example.R
 import com.example.model.AvatarAccessory
 import com.example.model.AvatarPreset
 import com.example.model.MainTab
+import com.example.model.MediaProcessingStatus
 import com.example.model.MediaVisualStyle
+import com.example.model.ProcessedMediaInfo
 import com.example.ui.theme.LocalCustomButtonColors
 import kotlin.math.PI
 import kotlin.math.cos
@@ -156,15 +159,34 @@ fun HighQualityAvatarView(
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (preset.useCreatorPhoto) {
-            Image(
-                painter = painterResource(id = R.drawable.img_creator_avatar),
-                contentDescription = preset.nameAr,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Canvas(modifier = Modifier.fillMaxSize()) {
+        when {
+            // A real photo uploaded from the device (or a remote avatar image):
+            // show only the photo, cropped nicely inside the circular frame.
+            !preset.imageUrl.isNullOrBlank() && !preset.useCreatorPhoto -> {
+                AsyncImage(
+                    model = preset.imageUrl,
+                    contentDescription = preset.nameAr,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = preset.imageZoom.coerceAtLeast(1f)
+                            scaleY = preset.imageZoom.coerceAtLeast(1f)
+                            translationX = this.size.width * preset.imageOffsetX
+                            translationY = this.size.height * preset.imageOffsetY
+                        },
+                    contentScale = ContentScale.Crop
+                )
+            }
+            preset.useCreatorPhoto -> {
+                Image(
+                    painter = painterResource(id = R.drawable.img_creator_avatar),
+                    contentDescription = preset.nameAr,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            else -> {
+                Canvas(modifier = Modifier.fillMaxSize()) {
                 val w = this.size.width
                 val h = this.size.height
 
@@ -432,16 +454,9 @@ fun HighQualityAvatarView(
                     }
                 }
             }
-            if (!preset.imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = preset.imageUrl,
-                    contentDescription = preset.nameAr,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
         }
     }
+}
 }
 
 @Composable
@@ -454,7 +469,8 @@ fun MediaSceneArtwork(
     isMuted: Boolean = false,
     playbackSpeed: Float = 1f,
     fillScreen: Boolean = false,
-    keepPrepared: Boolean = false
+    keepPrepared: Boolean = false,
+    mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "media_motion")
     val phase by infiniteTransition.animateFloat(
@@ -472,9 +488,18 @@ fun MediaSceneArtwork(
         if (!mediaUriString.isNullOrBlank()) {
             val isVideo = remember(mediaUriString) { isVideoMediaUri(context, mediaUriString) }
             if (isVideo) {
-                val frameBitmap by produceState<Bitmap?>(initialValue = null, mediaUriString) {
-                    value = withContext(Dispatchers.IO) {
-                        extractVideoFrameBitmap(context, mediaUriString)
+                val generatedPoster = mediaInfo.thumbnailUriString?.takeIf { it.isNotBlank() }
+                val frameBitmap by produceState<Bitmap?>(
+                    initialValue = null,
+                    mediaUriString,
+                    generatedPoster
+                ) {
+                    value = if (generatedPoster != null) {
+                        null
+                    } else {
+                        withContext(Dispatchers.IO) {
+                            extractVideoFrameBitmap(context, mediaUriString)
+                        }
                     }
                 }
                 Box(
@@ -483,21 +508,32 @@ fun MediaSceneArtwork(
                         .background(Color(0xFF0A0F16)),
                     contentAlignment = Alignment.Center
                 ) {
-                    val poster = frameBitmap
-                    if (poster != null) {
-                        Image(
-                            bitmap = poster.asImageBitmap(),
-                            contentDescription = "إطار الفيديو",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = if (fillScreen) ContentScale.Crop else ContentScale.Fit
-                        )
-                    } else {
-                        FallbackSceneArtwork(
-                            visualStyle = visualStyle,
-                            isPlaying = isPlaying,
-                            phase = phase,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    when {
+                        generatedPoster != null -> {
+                            // FFmpeg-generated thumbnail is shown as a poster while preparing/playing.
+                            AsyncImage(
+                                model = generatedPoster,
+                                contentDescription = "الصورة المصغرة للفيديو",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = if (fillScreen) ContentScale.Crop else ContentScale.Fit
+                            )
+                        }
+                        frameBitmap != null -> {
+                            Image(
+                                bitmap = frameBitmap!!.asImageBitmap(),
+                                contentDescription = "إطار الفيديو",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = if (fillScreen) ContentScale.Crop else ContentScale.Fit
+                            )
+                        }
+                        else -> {
+                            FallbackSceneArtwork(
+                                visualStyle = visualStyle,
+                                isPlaying = isPlaying,
+                                phase = phase,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
 
                     if (keepPrepared || isPlaying) {
@@ -727,6 +763,41 @@ fun MediaSceneArtwork(
                 phase = phase,
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        if (mediaInfo.status != MediaProcessingStatus.NONE) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color.Black.copy(alpha = 0.66f),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    if (mediaInfo.status == MediaProcessingStatus.PROCESSING) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = Color(0xFFFF2D55),
+                            strokeWidth = 1.5.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = when (mediaInfo.status) {
+                            MediaProcessingStatus.PROCESSING -> "جاري الضغط وتوليد الصورة المصغرة..."
+                            MediaProcessingStatus.READY -> mediaInfo.summaryAr ?: "تم الضغط وتوليد الصورة المصغرة"
+                            MediaProcessingStatus.FAILED -> "تعذّر الضغط — يتم عرض الملف الأصلي"
+                            MediaProcessingStatus.NONE -> ""
+                        },
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
         if (avatarOverlay != null) {

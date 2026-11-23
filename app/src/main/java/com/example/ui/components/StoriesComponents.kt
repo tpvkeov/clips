@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
@@ -402,6 +403,7 @@ fun StoryViewerOverlay(
     getAvatarPreset: (String) -> AvatarPreset,
     onMarkGroupViewed: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
+    onReportStory: (String) -> Unit,
     onClose: () -> Unit
 ) {
     BackHandler(enabled = true) {
@@ -511,6 +513,7 @@ fun StoryViewerOverlay(
         MediaSceneArtwork(
             visualStyle = currentSlide.visualStyle,
             mediaUriString = currentSlide.mediaUriString,
+            mediaInfo = currentSlide.mediaInfo,
             isPlaying = !isPaused,
             modifier = Modifier.fillMaxSize()
         )
@@ -607,6 +610,19 @@ fun StoryViewerOverlay(
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
+                }
+
+                IconButton(
+                    onClick = { onReportStory(currentSlide.id) },
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("story_viewer_report")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = "البلاغ عن القصة",
+                        tint = Color.White
+                    )
                 }
 
                 IconButton(

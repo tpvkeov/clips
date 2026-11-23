@@ -5,7 +5,9 @@ import com.example.model.AvatarAccessory
 import com.example.model.AvatarPreset
 import com.example.model.CameraFilter
 import com.example.model.CommentItem
+import com.example.model.FeatureSuggestion
 import com.example.model.MediaVisualStyle
+import com.example.model.SuggestionComment
 import com.example.model.PostItem
 import com.example.model.StorySlide
 import com.example.model.UserProfile
@@ -14,6 +16,9 @@ import com.example.model.VideoItem
 import com.example.model.VideoOrientation
 
 object DemoDataFactory {
+
+    /** Reserved id used when the user uploads a real photo from the device. */
+    const val CUSTOM_AVATAR_ID = "av_custom"
 
     val avatarPresets: List<AvatarPreset> = listOf(
         AvatarPreset(
@@ -765,6 +770,39 @@ object DemoDataFactory {
                     timeAgo = "منذ 5 ساعات"
                 )
             )
+        )
+    )
+
+    /** Seed ideas so the suggestions board is useful from the first launch. */
+    val initialSuggestions: List<FeatureSuggestion> = listOf(
+        FeatureSuggestion(
+            id = "sug_offline",
+            title = "مشاهدة clips بدون إنترنت",
+            description = "السماح بتنزيل المقاطع المفضلة لمشاهدتها لاحقاً في الطريق أو في الطائرة.",
+            authorName = "نور",
+            createdAt = 0L,
+            likesCount = 34,
+            comments = listOf(
+                SuggestionComment("sugc_1", "بايان", "ميزة مهمة جداً، خصوصاً للسفر!", "منذ ساعتين")
+            )
+        ),
+        FeatureSuggestion(
+            id = "sug_playlists",
+            title = "قوائم تشغيل مخصصة",
+            description = "تجميع المقاطع والفيديوهات في قوائم باسماء اختيارية مع إمكانية ترتيبها.",
+            authorName = "كريم",
+            createdAt = 0L,
+            likesCount = 21,
+            comments = emptyList()
+        ),
+        FeatureSuggestion(
+            id = "sug_slowmo",
+            title = "تحكم أسرع في سرعة المشاهدة",
+            description = "إضافة خيارات 0.5x و 2x داخل مشغل clips مثل مشغل الفيديو العريض.",
+            authorName = "سارة",
+            createdAt = 0L,
+            likesCount = 12,
+            comments = emptyList()
         )
     )
 }

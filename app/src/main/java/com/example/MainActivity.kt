@@ -45,14 +45,19 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.AuthRepository
+import com.example.data.AuthSecurityStore
 import com.example.data.ClipsLocalStore
 import com.example.data.DailyShareRewardStore
+import com.example.data.VideoProcessingService
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
 import com.example.ui.components.AddStoryBottomSheet
 import com.example.ui.components.CommentsBottomSheet
+import com.example.ui.components.DeviceBanGate
 import com.example.ui.components.FloatingPillBottomBar
 import com.example.ui.components.HorizontalVideoPlayerSheet
+import com.example.ui.components.ReportBottomSheet
 import com.example.ui.components.SaveLiquidAnimationOverlay
 import com.example.ui.components.ShareFeedbackOverlay
 import com.example.ui.components.StoryViewerOverlay
@@ -61,11 +66,13 @@ import com.example.update.AppUpdateChecker
 import com.example.update.AppUpdateInfo
 import com.example.update.UpdateCheckResult
 import com.example.update.UpdatePreferences
+import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ClipsReelsScreen
 import com.example.ui.screens.CreatorProfileScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.PostsScreen
 import com.example.ui.screens.ProfileScreen
+import com.example.ui.screens.SuggestionsScreen
 import com.example.ui.screens.UploadStudioScreen
 import com.example.ui.theme.ClipsTheme
 import com.example.viewmodel.ClipsViewModel
@@ -83,7 +90,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
-    val appContext: Context = LocalContext.current.applicationContext
+    val activityContext = LocalContext.current
+    val appContext: Context = activityContext.applicationContext
     val viewModel: ClipsViewModel = providedViewModel ?: viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -91,7 +99,12 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                 return ClipsViewModel(
                     appContext = appContext,
                     dailyShareStore = DailyShareRewardStore(appContext),
-                    localStore = ClipsLocalStore(appContext)
+                    localStore = ClipsLocalStore(appContext),
+                    authRepository = AuthRepository(
+                        context = appContext,
+                        securityStore = AuthSecurityStore(appContext)
+                    ),
+                    videoProcessor = VideoProcessingService(appContext)
                 ) as T
             }
         }
@@ -163,7 +176,13 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
     }
 
     // Back press on secondary tabs returns to Home tab cleanly
-    BackHandler(enabled = state.currentTab != MainTab.HOME) {
+    BackHandler(
+        enabled = state.currentTab != MainTab.HOME &&
+            !state.showSuggestions &&
+            state.reportTarget == null &&
+            !state.auth.showAuthScreen &&
+            !state.auth.isDeviceBanned
+    ) {
         viewModel.selectTab(MainTab.HOME)
     }
 
@@ -218,6 +237,10 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onToggleSave = viewModel::toggleSaveVideo,
                             onShareVideo = viewModel::shareVideo,
                             onOpenCreatorProfile = viewModel::openCreatorProfile,
+                            onReportVideo = viewModel::reportVideo,
+                            onOpenSuggestions = viewModel::openSuggestions,
+                            isGuest = state.auth.isGuest,
+                            onOpenAuth = { viewModel.openAuthScreen() },
                             onScrollDelta = viewModel::onScrollDelta
                         )
 
@@ -242,6 +265,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                                     viewModel.openComments(CommentsTarget.Video(videoId))
                                 },
                                 onShare = viewModel::shareVideo,
+                                onReport = viewModel::reportVideo,
                                 onOpenCreatorProfile = viewModel::openCreatorProfile,
                                 onBottomBarVisibilityChange = viewModel::setBottomBarVisible,
                                 isBottomBarVisible = state.isBottomBarVisible
@@ -266,6 +290,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                                 viewModel.openComments(CommentsTarget.Post(postId))
                             },
                             onSharePost = viewModel::sharePost,
+                            onReportPost = viewModel::reportPost,
                             savedVideos = state.savedItems,
                             savedPosts = state.savedPosts,
                             onOpenSavedVideo = viewModel::openClipInReels,
@@ -297,6 +322,11 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onCheckForUpdates = ::checkForUpdatesManually,
                             onOpenVideo = viewModel::openVideoPlayer,
                             onJumpToClipsTab = { viewModel.selectTab(MainTab.CLIPS) },
+                            onOpenSuggestions = viewModel::openSuggestions,
+                            isGuest = state.auth.isGuest,
+                            userEmail = state.auth.user?.email,
+                            onOpenAuth = { viewModel.openAuthScreen() },
+                            onSignOut = viewModel::signOut,
                             onUpdateProfile = viewModel::updateProfile,
                             onScrollDelta = viewModel::onScrollDelta
                         )
@@ -327,6 +357,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             viewModel.closeCreatorProfile()
                             viewModel.openClipInReels(clipId)
                         },
+                        onReportAccount = { viewModel.reportAccount(handle) },
                         onBack = viewModel::closeCreatorProfile
                     )
                 }
@@ -350,6 +381,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                         onAddComment = { text ->
                             viewModel.addComment(CommentsTarget.Video(activeVideo.id), text)
                         },
+                        onReport = { viewModel.reportVideo(activeVideo.id) },
                         onSelectSuggestedVideo = { nextVideoId ->
                             viewModel.openVideoPlayer(nextVideoId)
                         },
@@ -387,7 +419,24 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                         startInAddMode = target.startInAddMode,
                         getAvatarPreset = viewModel::getAvatarPreset,
                         onAddComment = { text -> viewModel.addComment(target, text) },
+                        onReportComment = viewModel::reportComment,
                         onDismiss = viewModel::closeComments
+                    )
+                }
+
+                // Feature suggestion board with likes and public comments
+                if (state.showSuggestions) {
+                    SuggestionsScreen(
+                        suggestions = state.suggestions,
+                        activeSuggestion = state.activeSuggestionId?.let { id ->
+                            state.suggestions.find { it.id == id }
+                        },
+                        onBack = viewModel::closeSuggestions,
+                        onAddSuggestion = viewModel::addSuggestion,
+                        onToggleLike = viewModel::toggleLikeSuggestion,
+                        onOpenDetails = viewModel::openSuggestionDetails,
+                        onCloseDetails = viewModel::closeSuggestionDetails,
+                        onAddComment = viewModel::addSuggestionComment
                     )
                 }
 
@@ -400,6 +449,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onMarkGroupViewed = viewModel::markStoryViewed,
                             onOpenCreatorProfile = viewModel::openCreatorProfile,
+                            onReportStory = viewModel::reportStory,
                             onClose = viewModel::closeStoryViewer
                         )
                     }
@@ -410,6 +460,36 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                     AddStoryBottomSheet(
                         onDismiss = viewModel::closeAddStorySheet,
                         onPublishStory = viewModel::publishStory
+                    )
+                }
+
+                // Reports are always on top, whatever content the user was viewing.
+                state.reportTarget?.let { target ->
+                    ReportBottomSheet(
+                        target = target,
+                        alreadyReported = target.targetKey in state.submittedReportKeys,
+                        onSwitchToAccount = { handle -> viewModel.reportAccount(handle) },
+                        onSubmit = { reason, details -> viewModel.submitReport(reason, details) },
+                        onDismiss = viewModel::closeReport
+                    )
+                }
+
+                if (state.auth.isDeviceBanned) {
+                    DeviceBanGate(
+                        auth = state.auth,
+                        onRecheck = viewModel::recheckDeviceBan
+                    )
+                } else if (state.auth.showAuthScreen) {
+                    AuthScreen(
+                        state = state.auth,
+                        onBack = viewModel::closeAuthScreen,
+                        onModeChange = viewModel::setAuthMode,
+                        onNameChange = viewModel::updateAuthName,
+                        onEmailChange = viewModel::updateAuthEmail,
+                        onPasswordChange = viewModel::updateAuthPassword,
+                        onSubmitEmail = viewModel::submitEmailAuth,
+                        onSubmitGoogle = { viewModel.submitGoogleAuth(activityContext) },
+                        onContinueAsGuest = viewModel::closeAuthScreen
                     )
                 }
 

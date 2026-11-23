@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -94,6 +95,7 @@ fun PostsScreen(
     onToggleSavePost: (String) -> Unit,
     onOpenComments: (String) -> Unit,
     onSharePost: (String) -> Unit,
+    onReportPost: (String) -> Unit,
     savedVideos: List<VideoItem> = emptyList(),
     savedPosts: List<PostItem> = emptyList(),
     onOpenSavedVideo: (String) -> Unit = {},
@@ -239,6 +241,7 @@ fun PostsScreen(
                     onToggleSave = { onToggleSavePost(post.id) },
                     onOpenComments = { onOpenComments(post.id) },
                     onShare = { onSharePost(post.id) },
+                    onReport = { onReportPost(post.id) },
                     onPlayLinkedVideo = { videoId -> onOpenLinkedVideo(videoId) },
                     onOpenAuthorProfile = { onOpenCreatorProfile(post.authorHandle) }
                 )
@@ -402,6 +405,7 @@ private fun PostCardItem(
     onToggleSave: () -> Unit,
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
+    onReport: () -> Unit,
     onPlayLinkedVideo: (String) -> Unit,
     onOpenAuthorProfile: () -> Unit
 ) {
@@ -461,6 +465,20 @@ private fun PostCardItem(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(
+                    onClick = onReport,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .testTag("post_report_${post.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = "إبلاغ عن المنشور",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
             if (post.content.isNotBlank()) {
@@ -487,6 +505,7 @@ private fun PostCardItem(
                     MediaSceneArtwork(
                         visualStyle = post.visualStyle ?: MediaVisualStyle.STUDIO_PHOTO,
                         mediaUriString = post.mediaUriString,
+                        mediaInfo = post.mediaInfo,
                         avatarOverlay = overlayAvatar,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -952,6 +971,7 @@ private fun SavedItemsSheet(
                                     MediaSceneArtwork(
                                         visualStyle = video.visualStyle,
                                         mediaUriString = video.mediaUriString,
+                                        mediaInfo = video.mediaInfo,
                                         modifier = Modifier.fillMaxSize()
                                     )
                                     Box(

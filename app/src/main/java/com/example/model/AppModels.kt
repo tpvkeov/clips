@@ -66,7 +66,11 @@ data class AvatarPreset(
     val accentColor: Color,
     val accessory: AvatarAccessory,
     val useCreatorPhoto: Boolean = false,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    /** Crop settings used only for a photo uploaded from the device. */
+    val imageZoom: Float = 1f,
+    val imageOffsetX: Float = 0f,
+    val imageOffsetY: Float = 0f
 )
 
 data class CameraFilter(
@@ -105,7 +109,8 @@ data class VideoItem(
     val mediaUriString: String? = null,
     val avatarOverlayId: String? = null,
     val isMine: Boolean = false,
-    val musicTitle: String = "صوت أصلي • clips"
+    val musicTitle: String = "صوت أصلي • clips",
+    val mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 )
 
 data class PostItem(
@@ -125,7 +130,8 @@ data class PostItem(
     val sharesCount: Int,
     val comments: List<CommentItem> = emptyList(),
     val isMine: Boolean = false,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 )
 
 data class UserProfile(
@@ -136,7 +142,12 @@ data class UserProfile(
     val followingCount: String,
     val totalLikesCount: String,
     val avatarPresetId: String,
-    val points: Int = 18
+    val points: Int = 18,
+    /** Local file URI of a real profile photo picked from the device. */
+    val avatarImageUri: String? = null,
+    val avatarImageZoom: Float = 1f,
+    val avatarImageOffsetX: Float = 0f,
+    val avatarImageOffsetY: Float = 0f
 )
 
 data class CreatorChannelInfo(
@@ -157,7 +168,8 @@ data class StorySlide(
     val visualStyle: MediaVisualStyle,
     val mediaUriString: String? = null,
     val timeAgo: String,
-    val durationSeconds: Int = 5
+    val durationSeconds: Int = 5,
+    val mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 )
 
 data class UserStoryGroup(
@@ -183,3 +195,149 @@ sealed class CommentsTarget {
         override val startInAddMode: Boolean = false
     ) : CommentsTarget()
 }
+
+/** Reasons shown in the single report sheet used for every kind of content. */
+enum class ReportReason(val labelAr: String) {
+    INAPPROPRIATE("محتوى غير لائق"),
+    ABUSE("إساءة أو تنمّر"),
+    SPAM("إعلانات أو تكرار مزعج"),
+    MISLEADING("معلومات مضللة أو احتيال"),
+    RIGHTS("انتهاك حقوق الملكية"),
+    OTHER("سبب آخر")
+}
+
+/** Anything in the app that can be reported: account, video, post, story or comment. */
+sealed class ReportTarget {
+    abstract val targetKey: String
+    abstract val titleAr: String
+    abstract val ownerHandle: String?
+
+    data class Account(
+        val handle: String,
+        val displayName: String
+    ) : ReportTarget() {
+        override val targetKey = "account:$handle"
+        override val titleAr = displayName
+        override val ownerHandle = handle
+    }
+
+    data class Video(
+        val videoId: String,
+        val videoTitle: String,
+        override val ownerHandle: String? = null
+    ) : ReportTarget() {
+        override val targetKey = "video:$videoId"
+        override val titleAr = videoTitle
+    }
+
+    data class Post(
+        val postId: String,
+        val postExcerpt: String,
+        override val ownerHandle: String? = null
+    ) : ReportTarget() {
+        override val targetKey = "post:$postId"
+        override val titleAr = postExcerpt
+    }
+
+    data class Story(
+        val storyId: String,
+        val caption: String,
+        override val ownerHandle: String? = null
+    ) : ReportTarget() {
+        override val targetKey = "story:$storyId"
+        override val titleAr = caption
+    }
+
+    data class Comment(
+        val commentId: String,
+        val authorName: String,
+        val commentText: String
+    ) : ReportTarget() {
+        override val targetKey = "comment:$commentId"
+        override val titleAr = "تعليق من $authorName: $commentText"
+        override val ownerHandle: String? = null
+    }
+}
+
+data class ReportEntry(
+    val id: String,
+    val targetKey: String,
+    val targetType: String,
+    val reason: ReportReason,
+    val details: String,
+    val createdAt: Long
+)
+
+data class SuggestionComment(
+    val id: String,
+    val authorName: String,
+    val text: String,
+    val timeAgo: String = "الآن"
+)
+
+/** A feature idea visible to everyone in the in-app suggestions board. */
+data class FeatureSuggestion(
+    val id: String,
+    val title: String,
+    val description: String,
+    val authorName: String,
+    val createdAt: Long,
+    val likesCount: Int = 0,
+    val isLikedByMe: Boolean = false,
+    val comments: List<SuggestionComment> = emptyList()
+)
+
+/** FFmpeg result attached to uploaded media so feeds can show the generated poster. */
+enum class MediaProcessingStatus { NONE, PROCESSING, READY, FAILED }
+
+data class ProcessedMediaInfo(
+    val status: MediaProcessingStatus = MediaProcessingStatus.NONE,
+    val thumbnailUriString: String? = null,
+    val sourceBytes: Long = 0L,
+    val outputBytes: Long = 0L,
+    val summaryAr: String? = null
+)
+
+enum class AuthMode { LOGIN, REGISTER }
+
+data class AuthUser(
+    val uid: String,
+    val email: String,
+    val displayName: String,
+    val photoUrl: String? = null,
+    val provider: String = "email"
+)
+
+/** Best-effort device identifiers collected at sign-in for device-level bans. */
+data class DeviceIdentity(
+    val deviceId: String,
+    val macAddress: String,
+    val ipAddress: String,
+    val model: String,
+    val fingerprint: String
+) {
+    val displaySummaryAr: String
+        get() = "الجهاز: ${deviceId.take(12)} • IP: $ipAddress • MAC: $macAddress"
+}
+
+enum class AuthPendingAction { OPEN_SUGGESTIONS, OPEN_REPORT }
+
+data class AuthUiState(
+    val isLoggedIn: Boolean = false,
+    val user: AuthUser? = null,
+    val isGuest: Boolean = true,
+    val showAuthScreen: Boolean = false,
+    val mode: AuthMode = AuthMode.LOGIN,
+    val name: String = "",
+    val email: String = "",
+    val password: String = "",
+    val errorAr: String? = null,
+    val isLoading: Boolean = false,
+    val failedAttempts: Int = 0,
+    val lockUntilMillis: Long = 0L,
+    val remainingLockSeconds: Int = 0,
+    val device: DeviceIdentity? = null,
+    val isDeviceBanned: Boolean = false,
+    val googleConfigured: Boolean = false,
+    val pendingAction: AuthPendingAction? = null
+)

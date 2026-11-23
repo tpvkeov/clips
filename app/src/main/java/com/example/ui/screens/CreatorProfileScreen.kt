@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
@@ -93,6 +94,7 @@ fun CreatorProfileScreen(
     onToggleFollow: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenClip: (String) -> Unit,
+    onReportAccount: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -198,22 +200,43 @@ fun CreatorProfileScreen(
                                 }
                             }
 
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = Color.Black.copy(alpha = 0.50f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.50f)
                                 ) {
-                                    ClipsBrandIcon(size = 22.dp)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "قناة المبدع",
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        ClipsBrandIcon(size = 22.dp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "قناة المبدع",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.56f),
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .testTag("creator_report_button")
+                                        .clickable(onClick = onReportAccount)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Flag,
+                                            contentDescription = "إبلاغ عن الحساب",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -474,6 +497,7 @@ fun CreatorProfileScreen(
                                             MediaSceneArtwork(
                                                 visualStyle = post.visualStyle ?: creator.bannerStyle,
                                                 mediaUriString = post.mediaUriString,
+                                                mediaInfo = post.mediaInfo,
                                                 modifier = Modifier.fillMaxSize()
                                             )
                                         }
@@ -596,6 +620,7 @@ private fun CreatorHorizontalVideoCard(
                 MediaSceneArtwork(
                     visualStyle = video.visualStyle,
                     mediaUriString = video.mediaUriString,
+                    mediaInfo = video.mediaInfo,
                     modifier = Modifier.fillMaxSize()
                 )
                 val playBtnColor = LocalCustomButtonColors.current.actionButtonsColor
@@ -674,6 +699,7 @@ private fun CreatorClipGridTile(
         MediaSceneArtwork(
             visualStyle = clip.visualStyle,
             mediaUriString = clip.mediaUriString,
+            mediaInfo = clip.mediaInfo,
             fillScreen = true,
             modifier = Modifier.fillMaxSize()
         )

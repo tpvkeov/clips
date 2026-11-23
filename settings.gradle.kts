@@ -18,6 +18,12 @@ dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
     google()
+    // ffmpeg-kit artifacts are no longer served by Maven Central directly;
+    // this mirror still hosts the published 6.0 LTS AARs.
+    maven {
+      url = uri("https://maven.aliyun.com/repository/central")
+      content { includeGroup("com.arthenica") }
+    }
     mavenCentral()
   }
 }

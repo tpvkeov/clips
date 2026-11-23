@@ -50,6 +50,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -121,6 +122,7 @@ fun ClipsReelsScreen(
     onToggleFollow: (String) -> Unit = {},
     onOpenComments: (String) -> Unit,
     onShare: (String) -> Unit,
+    onReport: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
     onBottomBarVisibilityChange: (Boolean) -> Unit = {},
     isBottomBarVisible: Boolean = true,
@@ -213,6 +215,7 @@ fun ClipsReelsScreen(
                             },
                             onOpenComments = { onOpenComments(clip.id) },
                             onShare = { onShare(clip.id) },
+                            onReport = { onReport(clip.id) },
                             onOpenCreatorProfile = { onOpenCreatorProfile(clip.creatorHandle) },
                             onToggleLayoutMode = onToggleLayoutMode,
                             onSelectLayoutMode = onSelectLayoutMode
@@ -343,6 +346,7 @@ private fun ReelPageItem(
     onToggleFollow: () -> Unit,
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
+    onReport: () -> Unit,
     onOpenCreatorProfile: () -> Unit,
     onToggleLayoutMode: () -> Unit,
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit
@@ -468,6 +472,7 @@ private fun ReelPageItem(
         MediaSceneArtwork(
             visualStyle = clip.visualStyle,
             mediaUriString = clip.mediaUriString,
+            mediaInfo = clip.mediaInfo,
             avatarOverlay = overlayAvatar,
             isPlaying = isPlaying && isActive,
             isMuted = isMuted,
@@ -627,6 +632,15 @@ private fun ReelPageItem(
                                 onClick = onShare,
                                 modifier = Modifier.testTag("clip_share_${clip.id}")
                             )
+
+                            ReelActionButton(
+                                icon = Icons.Filled.Flag,
+                                countText = "إبلاغ",
+                                tint = Color.White,
+                                contentDesc = "إبلاغ عن المقطع",
+                                onClick = onReport,
+                                modifier = Modifier.testTag("clip_report_${clip.id}")
+                            )
                         }
 
                         // Bottom-Start: Creator + Follow pill + Title + Description anchored cleanly at the bottom
@@ -763,6 +777,13 @@ private fun ReelPageItem(
                                 onClick = {
                                     showMoreMenu = false
                                     onShare()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("إبلاغ عن المقطع") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onReport()
                                 }
                             )
                             DropdownMenuItem(
@@ -933,6 +954,14 @@ private fun ReelPageItem(
                                         contentDesc = "مشاركة",
                                         onClick = onShare,
                                         modifier = Modifier.testTag("alt_clip_share_${clip.id}")
+                                    )
+
+                                    CompactCircleIconButton(
+                                        icon = Icons.Filled.Flag,
+                                        tint = Color.White,
+                                        contentDesc = "إبلاغ عن المقطع",
+                                        onClick = onReport,
+                                        modifier = Modifier.testTag("alt_clip_report_${clip.id}")
                                     )
                                 }
                             }

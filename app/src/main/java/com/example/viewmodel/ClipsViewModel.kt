@@ -1,20 +1,37 @@
 package com.example.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.AuthAttempt
+import com.example.data.AuthRepository
+import com.example.data.AuthSecurityStore
 import com.example.data.ClipsLocalStore
 import com.example.data.DailyShareRewardState
 import com.example.data.DailyShareRewardStore
 import com.example.data.DemoDataFactory
 import com.example.data.DemoVideoCache
+import com.example.data.DeviceIdentityCollector
+import com.example.data.ProfileAvatarState
 import com.example.data.ReelsFeedSelector
+import com.example.data.VideoProcessingService
 import com.example.data.WatchProgress
+import com.example.model.AuthMode
+import com.example.model.AuthPendingAction
+import com.example.model.AuthUiState
 import com.example.model.AvatarPreset
 import com.example.model.ClipsLayoutMode
 import com.example.model.CommentItem
 import com.example.model.CommentsTarget
 import com.example.model.CreatorChannelInfo
+import com.example.model.FeatureSuggestion
+import com.example.model.MediaProcessingStatus
+import com.example.model.ProcessedMediaInfo
+import com.example.model.ReportEntry
+import com.example.model.ReportReason
+import com.example.model.ReportTarget
+import com.example.model.SuggestionComment
 import com.example.model.MainTab
 import com.example.model.MediaVisualStyle
 import com.example.model.PostItem
@@ -33,6 +50,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +71,16 @@ data class ShareFeedbackEvent(
 data class ContinueWatchingInfo(
     val videoId: String,
     val progress: Float
+)
+
+/** Profile edits always use a real uploaded photo, never a cartoon avatar. */
+data class ProfileUpdate(
+    val name: String,
+    val bio: String,
+    val avatarImageUri: String?,
+    val avatarImageZoom: Float = 1f,
+    val avatarImageOffsetX: Float = 0f,
+    val avatarImageOffsetY: Float = 0f
 )
 
 data class ClipsUiState(
@@ -86,7 +114,14 @@ data class ClipsUiState(
     val lastWatched: WatchProgress? = null,
     val resumeCandidateId: String? = null,
     val continueWatching: ContinueWatchingInfo? = null,
-    val clipsSessionToken: Int = 0
+    val clipsSessionToken: Int = 0,
+    val reportTarget: ReportTarget? = null,
+    val reportEntries: List<ReportEntry> = emptyList(),
+    val submittedReportKeys: Set<String> = emptySet(),
+    val showSuggestions: Boolean = false,
+    val suggestions: List<FeatureSuggestion> = DemoDataFactory.initialSuggestions,
+    val activeSuggestionId: String? = null,
+    val auth: AuthUiState = AuthUiState()
 ) {
     val activePlayerVideo: VideoItem?
         get() = activePlayerVideoId?.let { id ->
@@ -208,13 +243,18 @@ data class ClipsUiState(
 class ClipsViewModel(
     private val appContext: Context? = null,
     private val dailyShareStore: DailyShareRewardStore? = null,
-    private val localStore: ClipsLocalStore? = null
+    private val localStore: ClipsLocalStore? = null,
+    private val authRepository: AuthRepository? = null,
+    private val videoProcessor: VideoProcessingService? = null
 ) : ViewModel() {
     companion object {
         private const val RESUME_WINDOW_MS = 60L * 60L * 1000L
     }
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
+
+    /** Remembered so a guest can finish signing in and land on the blocked action. */
+    private var pendingReportTarget: ReportTarget? = null
 
     init {
         dailyShareStore?.let { store ->
@@ -260,6 +300,44 @@ class ClipsViewModel(
                     } else null
                 )
             }
+
+            val savedReports = store.loadReports()
+            store.loadSuggestions()?.let { savedSuggestions ->
+                _uiState.update { it.copy(suggestions = savedSuggestions) }
+            }
+            store.loadProfileAvatar()?.let { savedAvatar ->
+                _uiState.update { state ->
+                    state.applyProfilePhoto(
+                        imageUri = savedAvatar.imageUri,
+                        zoom = savedAvatar.zoom,
+                        offsetX = savedAvatar.offsetX,
+                        offsetY = savedAvatar.offsetY
+                    )
+                }
+            }
+            _uiState.update { it.copy(reportEntries = savedReports) }
+        }
+
+        authRepository?.let { repository ->
+            val securityStore = appContext?.let { AuthSecurityStore(it) }
+            val device = appContext?.let { DeviceIdentityCollector.collect(it) }
+            val session = runCatching { repository.loadSession() }.getOrNull()
+            val lockedUntil = securityStore?.lockUntilMillis() ?: 0L
+            _uiState.update { state ->
+                state.copy(
+                    auth = state.auth.copy(
+                        isLoggedIn = session != null,
+                        isGuest = session == null,
+                        user = session,
+                        device = device,
+                        googleConfigured = repository.isGoogleConfigured(),
+                        isDeviceBanned = device?.let { repository.isDeviceBanned(it) } == true,
+                        failedAttempts = securityStore?.failedAttempts() ?: 0,
+                        lockUntilMillis = lockedUntil
+                    )
+                )
+            }
+            if (lockedUntil > System.currentTimeMillis()) startAuthLockTicker(lockedUntil)
         }
 
         // Cache the first demo clips once, then swap their URIs to local files.
@@ -284,7 +362,58 @@ class ClipsViewModel(
         }
     }
 
+    /** Keeps the uploaded photo everywhere the user appears (videos, posts, stories). */
+    private fun ClipsUiState.applyProfilePhoto(
+        imageUri: String?,
+        zoom: Float,
+        offsetX: Float,
+        offsetY: Float
+    ): ClipsUiState {
+        val avatarId = if (imageUri.isNullOrBlank()) "av_creator" else DemoDataFactory.CUSTOM_AVATAR_ID
+        val handle = userProfile.handle
+        return copy(
+            userProfile = userProfile.copy(
+                avatarPresetId = avatarId,
+                avatarImageUri = imageUri?.takeIf { it.isNotBlank() },
+                avatarImageZoom = zoom.coerceIn(1f, 3f),
+                avatarImageOffsetX = offsetX.coerceIn(-0.5f, 0.5f),
+                avatarImageOffsetY = offsetY.coerceIn(-0.5f, 0.5f)
+            ),
+            horizontalVideos = horizontalVideos.map {
+                if (it.creatorHandle == handle || it.isMine) it.copy(creatorAvatarId = avatarId) else it
+            },
+            verticalClips = verticalClips.map {
+                if (it.creatorHandle == handle || it.isMine) it.copy(creatorAvatarId = avatarId) else it
+            },
+            posts = posts.map {
+                if (it.authorHandle == handle || it.isMine) it.copy(authorAvatarId = avatarId) else it
+            },
+            stories = stories.map { group ->
+                if (group.isOwnStory) group.copy(avatarPresetId = avatarId) else group
+            }
+        )
+    }
+
     fun getAvatarPreset(id: String): AvatarPreset {
+        val profile = _uiState.value.userProfile
+        if (id == DemoDataFactory.CUSTOM_AVATAR_ID) {
+            val base = DemoDataFactory.avatarPresets.first()
+            val uri = profile.avatarImageUri
+            return if (uri.isNullOrBlank()) {
+                base
+            } else {
+                base.copy(
+                    id = DemoDataFactory.CUSTOM_AVATAR_ID,
+                    nameAr = "صورة حسابي",
+                    categoryAr = "صورة من الجهاز",
+                    useCreatorPhoto = false,
+                    imageUrl = uri,
+                    imageZoom = profile.avatarImageZoom,
+                    imageOffsetX = profile.avatarImageOffsetX,
+                    imageOffsetY = profile.avatarImageOffsetY
+                )
+            }
+        }
         return DemoDataFactory.avatarPresets.find { it.id == id }
             ?: DemoDataFactory.avatarPresets.first()
     }
@@ -388,7 +517,8 @@ class ClipsViewModel(
             caption = caption.trim().ifEmpty { "لقطة مؤقتة جديدة عبر clips ✨" },
             visualStyle = if (mediaUriString != null) MediaVisualStyle.CUSTOM_URI else visualStyle,
             mediaUriString = mediaUriString,
-            timeAgo = "الآن"
+            timeAgo = "الآن",
+            mediaInfo = initialMediaInfo(mediaUriString)
         )
         _uiState.update { state ->
             val existingOwn = state.stories.find { it.isOwnStory }
@@ -418,6 +548,7 @@ class ClipsViewModel(
                 feedbackMessage = "تمت مشاركة قصتك المؤقتة (24 ساعة)!"
             )
         }
+        queueMediaProcessing(newSlide.id, mediaUriString, UploadedMediaKind.STORY)
     }
 
     fun toggleFollowCreator(handle: String) {
@@ -823,6 +954,87 @@ class ClipsViewModel(
         }
     }
 
+    private enum class UploadedMediaKind { VIDEO, POST, STORY }
+
+    private fun isProcessableVideo(uri: String?): Boolean {
+        if (uri.isNullOrBlank()) return false
+        val context = appContext ?: return false
+        val mime = runCatching { context.contentResolver.getType(Uri.parse(uri)) }.getOrNull()
+        if (mime?.startsWith("video/") == true) return true
+        val path = uri.substringBefore("?")
+        return listOf(".mp4", ".mov", ".mkv", ".webm", ".3gp")
+            .any { path.endsWith(it, ignoreCase = true) }
+    }
+
+    private fun initialMediaInfo(uri: String?): ProcessedMediaInfo =
+        if (videoProcessor != null && isProcessableVideo(uri)) {
+            ProcessedMediaInfo(status = MediaProcessingStatus.PROCESSING)
+        } else ProcessedMediaInfo()
+
+    private fun queueMediaProcessing(
+        id: String,
+        sourceUri: String?,
+        kind: UploadedMediaKind
+    ) {
+        val processor = videoProcessor ?: return
+        if (!isProcessableVideo(sourceUri)) return
+        val videoUri = sourceUri ?: return
+
+        viewModelScope.launch {
+            val result = processor.process(videoUri)
+            val info = if (result == null) {
+                ProcessedMediaInfo(status = MediaProcessingStatus.FAILED)
+            } else {
+                val savedPercent = if (result.sourceBytes > 0L) {
+                    (((1f - result.outputBytes.toFloat() / result.sourceBytes) * 100f).toInt())
+                        .coerceIn(0, 95)
+                } else 0
+                ProcessedMediaInfo(
+                    status = MediaProcessingStatus.READY,
+                    thumbnailUriString = result.thumbnailUriString,
+                    sourceBytes = result.sourceBytes,
+                    outputBytes = result.outputBytes,
+                    summaryAr = "تم الضغط بنسبة $savedPercent% وتوليد صورة مصغرة تلقائياً"
+                )
+            }
+            val finalUri = result?.mediaUriString ?: sourceUri
+
+            _uiState.update { state ->
+                when (kind) {
+                    UploadedMediaKind.VIDEO -> state.copy(
+                        horizontalVideos = state.horizontalVideos.map {
+                            if (it.id == id) it.copy(mediaUriString = finalUri, mediaInfo = info) else it
+                        },
+                        verticalClips = state.verticalClips.map {
+                            if (it.id == id) it.copy(mediaUriString = finalUri, mediaInfo = info) else it
+                        },
+                        posts = state.posts.map {
+                            if (it.linkedVideoId == id) {
+                                it.copy(mediaUriString = finalUri, mediaInfo = info)
+                            } else it
+                        }
+                    )
+                    UploadedMediaKind.POST -> state.copy(
+                        posts = state.posts.map {
+                            if (it.id == id) it.copy(mediaUriString = finalUri, mediaInfo = info) else it
+                        }
+                    )
+                    UploadedMediaKind.STORY -> state.copy(
+                        stories = state.stories.map { group ->
+                            group.copy(
+                                slides = group.slides.map { slide ->
+                                    if (slide.id == id) {
+                                        slide.copy(mediaUriString = finalUri, mediaInfo = info)
+                                    } else slide
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     fun publishFromUpload(
         contentType: UploadContentType,
         title: String,
@@ -866,7 +1078,8 @@ class ClipsViewModel(
                     visualStyle = finalStyle,
                     mediaUriString = mediaUriString,
                     avatarOverlayId = avatarOverlayId,
-                    isMine = true
+                    isMine = true,
+                    mediaInfo = initialMediaInfo(mediaUriString)
                 )
                 _uiState.update { state ->
                     state.copy(
@@ -876,6 +1089,7 @@ class ClipsViewModel(
                         feedbackMessage = "تم نشر الفيديو الأفقي في الصفحة الرئيسية!"
                     )
                 }
+                queueMediaProcessing(newVideoId, mediaUriString, UploadedMediaKind.VIDEO)
             }
             UploadContentType.VERTICAL_CLIP -> {
                 val newClipId = "v_${UUID.randomUUID()}"
@@ -896,7 +1110,8 @@ class ClipsViewModel(
                     visualStyle = finalStyle,
                     mediaUriString = mediaUriString,
                     avatarOverlayId = avatarOverlayId,
-                    isMine = true
+                    isMine = true,
+                    mediaInfo = initialMediaInfo(mediaUriString)
                 )
                 _uiState.update { state ->
                     state.copy(
@@ -906,6 +1121,7 @@ class ClipsViewModel(
                         feedbackMessage = "تم نشر الفيديو العمودي في clips فقط!"
                     )
                 }
+                queueMediaProcessing(newClipId, mediaUriString, UploadedMediaKind.VIDEO)
             }
             UploadContentType.PHOTO_POST -> {
                 val newPost = PostItem(
@@ -969,7 +1185,8 @@ class ClipsViewModel(
                 timeAgo = "الآن",
                 visualStyle = finalStyle ?: MediaVisualStyle.TECH_WAVE,
                 mediaUriString = mediaUriString,
-                isMine = true
+                isMine = true,
+                mediaInfo = initialMediaInfo(mediaUriString)
             )
             val newPost = PostItem(
                 id = "p_${UUID.randomUUID()}",
@@ -984,7 +1201,8 @@ class ClipsViewModel(
                 linkedVideoDuration = "05:10",
                 likesCount = 0,
                 sharesCount = 0,
-                isMine = true
+                isMine = true,
+                mediaInfo = initialMediaInfo(mediaUriString)
             )
             _uiState.update { state ->
                 state.copy(
@@ -993,9 +1211,11 @@ class ClipsViewModel(
                     feedbackMessage = "تم نشر الفيديو الأفقي في المنشورات والصفحة الرئيسية!"
                 )
             }
+            queueMediaProcessing(newVideoId, mediaUriString, UploadedMediaKind.VIDEO)
         } else {
+            val newPostId = "p_${UUID.randomUUID()}"
             val newPost = PostItem(
-                id = "p_${UUID.randomUUID()}",
+                id = newPostId,
                 authorName = profile.name,
                 authorHandle = profile.handle,
                 authorAvatarId = profile.avatarPresetId,
@@ -1005,7 +1225,8 @@ class ClipsViewModel(
                 mediaUriString = mediaUriString,
                 likesCount = 0,
                 sharesCount = 0,
-                isMine = true
+                isMine = true,
+                mediaInfo = initialMediaInfo(mediaUriString)
             )
             _uiState.update { state ->
                 state.copy(
@@ -1013,21 +1234,416 @@ class ClipsViewModel(
                     feedbackMessage = "تم نشر منشورك!"
                 )
             }
+            queueMediaProcessing(newPostId, mediaUriString, UploadedMediaKind.POST)
         }
     }
 
-    fun updateProfile(name: String, bio: String, avatarPresetId: String) {
-        val cleanName = name.trim().ifEmpty { _uiState.value.userProfile.name }
-        val cleanBio = bio.trim().ifEmpty { _uiState.value.userProfile.bio }
+    fun updateProfile(update: ProfileUpdate) {
+        val cleanName = update.name.trim().ifEmpty { _uiState.value.userProfile.name }
+        val cleanBio = update.bio.trim().ifEmpty { _uiState.value.userProfile.bio }
+        _uiState.update { state ->
+            val photoApplied = state.applyProfilePhoto(
+                imageUri = update.avatarImageUri,
+                zoom = update.avatarImageZoom,
+                offsetX = update.avatarImageOffsetX,
+                offsetY = update.avatarImageOffsetY
+            )
+            val next = photoApplied.copy(
+                userProfile = photoApplied.userProfile.copy(name = cleanName, bio = cleanBio)
+            )
+            localStore?.saveProfileAvatar(
+                ProfileAvatarState(
+                    imageUri = update.avatarImageUri,
+                    zoom = update.avatarImageZoom,
+                    offsetX = update.avatarImageOffsetX,
+                    offsetY = update.avatarImageOffsetY
+                )
+            )
+            next.copy(
+                feedbackMessage = if (update.avatarImageUri.isNullOrBlank()) {
+                    "تم تحديث بيانات الحساب"
+                } else {
+                    "تم رفع صورة حسابك من الجهاز بنجاح"
+                }
+            )
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Authentication, guest access and device-level security.
+    // -----------------------------------------------------------------
+
+    private fun isSignedIn(): Boolean {
+        val auth = _uiState.value.auth
+        return auth.isLoggedIn && !auth.isDeviceBanned
+    }
+
+    private fun startAuthLockTicker(lockUntilMillis: Long) {
+        viewModelScope.launch {
+            while (true) {
+                val remaining = ((lockUntilMillis - System.currentTimeMillis() + 999) / 1000)
+                    .coerceAtLeast(0L).toInt()
+                _uiState.update { state ->
+                    state.copy(
+                        auth = state.auth.copy(
+                            remainingLockSeconds = remaining,
+                            lockUntilMillis = if (remaining == 0) 0L else lockUntilMillis
+                        )
+                    )
+                }
+                if (remaining == 0) break
+                delay(1000L)
+            }
+        }
+    }
+
+    fun openAuthScreen(
+        mode: AuthMode = AuthMode.LOGIN,
+        pendingAction: AuthPendingAction? = null
+    ) {
         _uiState.update { state ->
             state.copy(
-                userProfile = state.userProfile.copy(
-                    name = cleanName,
-                    bio = cleanBio,
-                    avatarPresetId = avatarPresetId
-                ),
-                feedbackMessage = "تم تحديث بيانات الحساب"
+                auth = state.auth.copy(
+                    showAuthScreen = true,
+                    mode = mode,
+                    errorAr = null,
+                    pendingAction = pendingAction
+                )
             )
+        }
+    }
+
+    fun closeAuthScreen() {
+        pendingReportTarget = null
+        _uiState.update { state ->
+            state.copy(
+                auth = state.auth.copy(
+                    showAuthScreen = false,
+                    errorAr = null,
+                    isLoading = false,
+                    pendingAction = null
+                )
+            )
+        }
+    }
+
+    fun setAuthMode(mode: AuthMode) {
+        _uiState.update { state ->
+            state.copy(auth = state.auth.copy(mode = mode, errorAr = null))
+        }
+    }
+
+    fun updateAuthName(value: String) {
+        _uiState.update { it.copy(auth = it.auth.copy(name = value)) }
+    }
+
+    fun updateAuthEmail(value: String) {
+        _uiState.update { it.copy(auth = it.auth.copy(email = value)) }
+    }
+
+    fun updateAuthPassword(value: String) {
+        _uiState.update { it.copy(auth = it.auth.copy(password = value)) }
+    }
+
+    /** Follow and like stay open to guests; only reports and suggestions require login. */
+    private fun requireAuth(
+        action: AuthPendingAction,
+        reportTarget: ReportTarget? = null
+    ): Boolean {
+        if (isSignedIn()) return true
+        pendingReportTarget = reportTarget
+        openAuthScreen(AuthMode.LOGIN, action)
+        return false
+    }
+
+    fun submitEmailAuth() {
+        val repository = authRepository ?: return
+        val auth = _uiState.value.auth
+        if (auth.isLoading || auth.lockUntilMillis > System.currentTimeMillis()) return
+
+        _uiState.update { it.copy(auth = it.auth.copy(isLoading = true, errorAr = null)) }
+        val attempt = if (auth.mode == AuthMode.REGISTER) {
+            repository.registerWithEmail(auth.name, auth.email, auth.password)
+        } else {
+            repository.signInWithEmail(auth.email, auth.password)
+        }
+        handleAuthAttempt(attempt)
+    }
+
+    fun submitGoogleAuth(activityContext: Context) {
+        val repository = authRepository ?: return
+        val auth = _uiState.value.auth
+        if (auth.isLoading || auth.lockUntilMillis > System.currentTimeMillis()) return
+
+        _uiState.update { it.copy(auth = it.auth.copy(isLoading = true, errorAr = null)) }
+        viewModelScope.launch {
+            val attempt = repository.signInWithGoogle(activityContext)
+            handleAuthAttempt(attempt)
+        }
+    }
+
+    private fun handleAuthAttempt(attempt: AuthAttempt) {
+        val pendingAction = _uiState.value.auth.pendingAction
+        val securityStore = appContext?.let { AuthSecurityStore(it) }
+        var newLockUntil: Long? = null
+
+        if (attempt.user != null) {
+            val user = attempt.user
+            _uiState.update { state ->
+                state.copy(
+                    userProfile = state.userProfile.copy(
+                        name = user.displayName.ifBlank { state.userProfile.name }
+                    ),
+                    auth = state.auth.copy(
+                        isLoggedIn = true,
+                        isGuest = false,
+                        user = user,
+                        isLoading = false,
+                        errorAr = null,
+                        failedAttempts = 0,
+                        lockUntilMillis = 0L,
+                        remainingLockSeconds = 0
+                    )
+                )
+            }
+            if (pendingAction != null) resumePendingAction()
+            else _uiState.update { it.copy(auth = it.auth.copy(pendingAction = null)) }
+            return
+        }
+
+        val attemptResult = if (attempt.countAsFailure) {
+            securityStore?.recordFailedAttempt()
+        } else null
+        val lockUntil = attemptResult?.lockUntilMillis ?: _uiState.value.auth.lockUntilMillis
+        if (attemptResult?.locked == true && lockUntil > System.currentTimeMillis()) {
+            newLockUntil = lockUntil
+        }
+        _uiState.update { state ->
+            state.copy(
+                auth = state.auth.copy(
+                    isLoading = false,
+                    errorAr = attempt.errorAr,
+                    failedAttempts = attemptResult?.failedAttempts ?: state.auth.failedAttempts,
+                    lockUntilMillis = lockUntil
+                )
+            )
+        }
+        newLockUntil?.let { startAuthLockTicker(it) }
+    }
+
+    private fun resumePendingAction() {
+        val pendingAction = _uiState.value.auth.pendingAction
+        val target = pendingReportTarget
+        pendingReportTarget = null
+        _uiState.update { state ->
+            when (pendingAction) {
+                AuthPendingAction.OPEN_SUGGESTIONS -> state.copy(
+                    showSuggestions = true,
+                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
+                )
+                AuthPendingAction.OPEN_REPORT -> state.copy(
+                    reportTarget = target ?: state.reportTarget,
+                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
+                )
+                null -> state.copy(
+                    auth = state.auth.copy(showAuthScreen = false, pendingAction = null)
+                )
+            }
+        }
+    }
+
+    fun recheckDeviceBan() {
+        val repository = authRepository ?: return
+        val device = appContext?.let { DeviceIdentityCollector.collect(it) }
+        val banned = device?.let { repository.isDeviceBanned(it) } == true
+        _uiState.update { state -> state.copy(auth = state.auth.copy(isDeviceBanned = banned)) }
+    }
+
+    fun signOut() {
+        authRepository?.signOut()
+        pendingReportTarget = null
+        _uiState.update { state ->
+            state.copy(
+                auth = state.auth.copy(
+                    isLoggedIn = false,
+                    isGuest = true,
+                    user = null,
+                    showAuthScreen = false,
+                    pendingAction = null,
+                    errorAr = null
+                )
+            )
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Reporting: one sheet for videos, posts, stories, comments and accounts.
+    // -----------------------------------------------------------------
+
+    fun openReport(target: ReportTarget) {
+        if (!requireAuth(AuthPendingAction.OPEN_REPORT, target)) return
+        _uiState.update { it.copy(reportTarget = target) }
+    }
+
+    fun reportVideo(videoId: String) {
+        val video = (horizontalVideos() + verticalClips()).firstOrNull { it.id == videoId } ?: return
+        openReport(ReportTarget.Video(video.id, video.title, video.creatorHandle))
+    }
+
+    fun reportPost(postId: String) {
+        val post = _uiState.value.posts.firstOrNull { it.id == postId } ?: return
+        openReport(
+            ReportTarget.Post(
+                postId = post.id,
+                postExcerpt = post.content.take(90).ifBlank { "منشور على clips" },
+                ownerHandle = post.authorHandle
+            )
+        )
+    }
+
+    fun reportComment(comment: CommentItem) {
+        openReport(
+            ReportTarget.Comment(
+                commentId = comment.id,
+                authorName = comment.authorName,
+                commentText = comment.text.take(90)
+            )
+        )
+    }
+
+    fun reportAccount(handle: String) {
+        val info = _uiState.value.resolveCreatorInfo(handle)
+        openReport(ReportTarget.Account(info.handle, info.name))
+    }
+
+    fun reportStory(storyId: String) {
+        val state = _uiState.value
+        val group = state.stories.firstOrNull { it.slides.any { slide -> slide.id == storyId } } ?: return
+        val slide = group.slides.first { it.id == storyId }
+        openReport(ReportTarget.Story(storyId, slide.caption.take(90), group.creatorHandle))
+    }
+
+    fun closeReport() {
+        _uiState.update { it.copy(reportTarget = null) }
+    }
+
+    fun submitReport(reason: ReportReason, details: String) {
+        if (!isSignedIn()) {
+            val target = _uiState.value.reportTarget
+            requireAuth(AuthPendingAction.OPEN_REPORT, target)
+            return
+        }
+        _uiState.update { state ->
+            val target = state.reportTarget ?: return@update state
+            val type = when (target) {
+                is ReportTarget.Account -> "account"
+                is ReportTarget.Video -> "video"
+                is ReportTarget.Post -> "post"
+                is ReportTarget.Story -> "story"
+                is ReportTarget.Comment -> "comment"
+            }
+            val entry = ReportEntry(
+                id = "rep_${UUID.randomUUID()}",
+                targetKey = target.targetKey,
+                targetType = type,
+                reason = reason,
+                details = details.trim(),
+                createdAt = System.currentTimeMillis()
+            )
+            val entries = (state.reportEntries + entry).takeLast(200)
+            localStore?.saveReports(entries)
+            state.copy(
+                reportEntries = entries,
+                submittedReportKeys = state.submittedReportKeys + target.targetKey,
+                reportTarget = null,
+                feedbackMessage = "تم إرسال البلاغ، شكراً لمساعدتنا في الحفاظ على clips"
+            )
+        }
+    }
+
+    private fun horizontalVideos() = _uiState.value.horizontalVideos
+    private fun verticalClips() = _uiState.value.verticalClips
+
+    // -----------------------------------------------------------------
+    // Feature suggestions board.
+    // -----------------------------------------------------------------
+
+    fun openSuggestions() {
+        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
+        _uiState.update { it.copy(showSuggestions = true) }
+    }
+
+    fun closeSuggestions() {
+        _uiState.update { it.copy(showSuggestions = false, activeSuggestionId = null) }
+    }
+
+    fun openSuggestionDetails(id: String) {
+        _uiState.update { it.copy(activeSuggestionId = id) }
+    }
+
+    fun closeSuggestionDetails() {
+        _uiState.update { it.copy(activeSuggestionId = null) }
+    }
+
+    fun addSuggestion(title: String, description: String) {
+        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
+        val cleanTitle = title.trim()
+        if (cleanTitle.isBlank()) return
+        _uiState.update { state ->
+            val idea = FeatureSuggestion(
+                id = "sug_${UUID.randomUUID()}",
+                title = cleanTitle,
+                description = description.trim(),
+                authorName = state.userProfile.name,
+                createdAt = System.currentTimeMillis()
+            )
+            val next = state.copy(
+                suggestions = listOf(idea) + state.suggestions,
+                feedbackMessage = "تمت إضافة اقتراحك، شكراً لتطوير clips!"
+            )
+            localStore?.saveSuggestions(next.suggestions)
+            next
+        }
+    }
+
+    fun toggleLikeSuggestion(id: String) {
+        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
+        _uiState.update { state ->
+            val next = state.copy(
+                suggestions = state.suggestions.map { suggestion ->
+                    if (suggestion.id != id) suggestion else {
+                        val liked = !suggestion.isLikedByMe
+                        suggestion.copy(
+                            isLikedByMe = liked,
+                            likesCount = (suggestion.likesCount + if (liked) 1 else -1).coerceAtLeast(0)
+                        )
+                    }
+                }
+            )
+            localStore?.saveSuggestions(next.suggestions)
+            next
+        }
+    }
+
+    fun addSuggestionComment(id: String, text: String) {
+        if (!requireAuth(AuthPendingAction.OPEN_SUGGESTIONS)) return
+        val cleanText = text.trim()
+        if (cleanText.isBlank()) return
+        _uiState.update { state ->
+            val comment = SuggestionComment(
+                id = "sugc_${UUID.randomUUID()}",
+                authorName = state.userProfile.name,
+                text = cleanText
+            )
+            val next = state.copy(
+                suggestions = state.suggestions.map { suggestion ->
+                    if (suggestion.id == id) {
+                        suggestion.copy(comments = suggestion.comments + comment)
+                    } else suggestion
+                }
+            )
+            localStore?.saveSuggestions(next.suggestions)
+            next
         }
     }
 }

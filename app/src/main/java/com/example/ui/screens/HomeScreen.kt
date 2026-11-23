@@ -33,8 +33,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -109,6 +112,10 @@ fun HomeScreen(
     onToggleSave: (String) -> Unit,
     onShareVideo: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
+    onReportVideo: (String) -> Unit,
+    onOpenSuggestions: () -> Unit,
+    isGuest: Boolean = false,
+    onOpenAuth: () -> Unit = {},
     onScrollDelta: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -177,41 +184,96 @@ fun HomeScreen(
                         }
                     }
 
-                    Surface(
-                        shape = CircleShape,
-                        color = if (searchExpanded) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                        } else if (isLight) {
-                            Color.White.copy(alpha = 0.80f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHigh
-                        },
-                        border = BorderStroke(
-                            width = 1.dp,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isLight) Color.White.copy(alpha = 0.80f)
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .testTag("home_suggestions_button")
+                                .clickable(onClick = onOpenSuggestions)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Filled.Lightbulb,
+                                    contentDescription = "اقتراحات التطوير",
+                                    tint = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = CircleShape,
                             color = if (searchExpanded) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                            } else if (isLight) {
+                                Color.White.copy(alpha = 0.80f)
                             } else {
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                            }
-                        ),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .testTag("home_search_toggle")
-                            .clickable {
-                                if (searchExpanded && searchQuery.isNotEmpty()) {
-                                    onSearchQueryChange("")
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (searchExpanded) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                } else {
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                                 }
-                                searchExpanded = !searchExpanded
+                            ),
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .testTag("home_search_toggle")
+                                .clickable {
+                                    if (searchExpanded && searchQuery.isNotEmpty()) {
+                                        onSearchQueryChange("")
+                                    }
+                                    searchExpanded = !searchExpanded
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                                    contentDescription = "بحث في الصفحة الرئيسية",
+                                    tint = if (searchExpanded) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
+                        }
+                    }
+                }
+
+                if (isGuest) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)),
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable(onClick = onOpenAuth)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
-                                imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                                contentDescription = "بحث في الصفحة الرئيسية",
-                                tint = if (searchExpanded) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.size(22.dp)
+                                imageVector = Icons.Filled.AccountCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "أنت ضيف • سجّل الدخول للاقتراحات والابلاغات",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -347,7 +409,8 @@ fun HomeScreen(
                             onClick = { onOpenVideo(video.id) },
                             onOpenCreatorProfile = { onOpenCreatorProfile(video.creatorHandle) },
                             onToggleSave = { onToggleSave(video.id) },
-                            onShare = { onShareVideo(video.id) }
+                            onShare = { onShareVideo(video.id) },
+                            onReport = { onReportVideo(video.id) }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         VideoFeedDivider(isLight = isLight)
@@ -385,7 +448,8 @@ fun HomeScreen(
                             onClick = { onOpenVideo(video.id) },
                             onOpenCreatorProfile = { onOpenCreatorProfile(video.creatorHandle) },
                             onToggleSave = { onToggleSave(video.id) },
-                            onShare = { onShareVideo(video.id) }
+                            onShare = { onShareVideo(video.id) },
+                            onReport = { onReportVideo(video.id) }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         VideoFeedDivider(isLight = isLight)
@@ -407,7 +471,8 @@ private fun HorizontalVideoCard(
     onClick: () -> Unit,
     onOpenCreatorProfile: () -> Unit,
     onToggleSave: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onReport: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -436,6 +501,7 @@ private fun HorizontalVideoCard(
             MediaSceneArtwork(
                 visualStyle = video.visualStyle,
                 mediaUriString = video.mediaUriString,
+                mediaInfo = video.mediaInfo,
                 avatarOverlay = overlayAvatar,
                 fillScreen = true,
                 modifier = Modifier
@@ -588,6 +654,28 @@ private fun HorizontalVideoCard(
                     )
                 }
             }
+
+            IconButton(
+                onClick = onReport,
+                modifier = Modifier
+                    .size(48.dp)
+                    .testTag("home_report_${video.id}")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = "إبلاغ عن الفيديو",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -737,6 +825,7 @@ private fun ContinueWatchingCard(
                     MediaSceneArtwork(
                         visualStyle = video.visualStyle,
                         mediaUriString = video.mediaUriString,
+                        mediaInfo = video.mediaInfo,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

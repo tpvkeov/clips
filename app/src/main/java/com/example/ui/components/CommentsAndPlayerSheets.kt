@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -136,6 +137,7 @@ fun CommentsBottomSheet(
     startInAddMode: Boolean = false,
     getAvatarPreset: (String) -> AvatarPreset,
     onAddComment: (String) -> Unit,
+    onReportComment: (CommentItem) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -262,6 +264,7 @@ fun CommentsBottomSheet(
                                 MediaSceneArtwork(
                                     visualStyle = targetPost.visualStyle ?: MediaVisualStyle.STUDIO_PHOTO,
                                     mediaUriString = targetPost.mediaUriString,
+                                    mediaInfo = targetPost.mediaInfo,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -327,11 +330,24 @@ fun CommentsBottomSheet(
                                             style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Text(
-                                            text = comment.timeAgo,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = comment.timeAgo,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            IconButton(
+                                                onClick = { onReportComment(comment) },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Flag,
+                                                    contentDescription = "إبلاغ عن التعليق",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
@@ -404,6 +420,7 @@ fun HorizontalVideoPlayerSheet(
     onOpenComments: () -> Unit,
     onOpenAddComment: () -> Unit = onOpenComments,
     onAddComment: (String) -> Unit,
+    onReport: () -> Unit,
     onSelectSuggestedVideo: (String) -> Unit,
     onSelectSuggestedClip: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
@@ -637,6 +654,7 @@ fun HorizontalVideoPlayerSheet(
                         onToggleLike = onToggleLike,
                         onToggleSave = onToggleSave,
                         onShare = onShare,
+                        onReport = onReport,
                         onOpenComments = onOpenComments,
                         onOpenCreatorProfile = { onOpenCreatorProfile(video.creatorHandle) }
                     )
@@ -788,6 +806,7 @@ fun HorizontalVideoPlayerSheet(
                         onToggleLike = onToggleLike,
                         onToggleSave = onToggleSave,
                         onShare = onShare,
+                        onReport = onReport,
                         onOpenComments = onOpenComments,
                         onOpenCreatorProfile = { onOpenCreatorProfile(video.creatorHandle) }
                     )
@@ -997,6 +1016,7 @@ private fun VideoViewportBox(
         MediaSceneArtwork(
             visualStyle = video.visualStyle,
             mediaUriString = video.mediaUriString,
+            mediaInfo = video.mediaInfo,
             avatarOverlay = video.avatarOverlayId?.let(getAvatarPreset),
             isPlaying = isPlaying,
             modifier = Modifier.matchParentSize()
@@ -1245,6 +1265,7 @@ private fun VideoDetailsAndActionsColumn(
     onToggleLike: () -> Unit,
     onToggleSave: () -> Unit,
     onShare: () -> Unit,
+    onReport: () -> Unit,
     onOpenComments: () -> Unit,
     onOpenCreatorProfile: () -> Unit
 ) {
@@ -1358,6 +1379,19 @@ private fun VideoDetailsAndActionsColumn(
                 onClick = onShare,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(
+                onClick = onReport,
+                modifier = Modifier
+                    .size(46.dp)
+                    .testTag("player_report_${video.id}")
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Flag,
+                    contentDescription = "إبلاغ عن الفيديو",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
@@ -1626,6 +1660,7 @@ private fun SuggestedHorizontalVideoRowCard(
                 MediaSceneArtwork(
                     visualStyle = video.visualStyle,
                     mediaUriString = video.mediaUriString,
+                    mediaInfo = video.mediaInfo,
                     modifier = Modifier.fillMaxSize()
                 )
                 val playAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
@@ -1782,6 +1817,7 @@ private fun ExpandedSuggestedClipsShelf(
                         MediaSceneArtwork(
                             visualStyle = clip.visualStyle,
                             mediaUriString = clip.mediaUriString,
+                            mediaInfo = clip.mediaInfo,
                             fillScreen = true,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -1937,6 +1973,7 @@ private fun FullscreenVideoPlayerDialog(
                     MediaSceneArtwork(
                         visualStyle = video.visualStyle,
                         mediaUriString = video.mediaUriString,
+                        mediaInfo = video.mediaInfo,
                         avatarOverlay = avatarOverlay,
                         isPlaying = isPlaying,
                         modifier = Modifier.fillMaxSize()
