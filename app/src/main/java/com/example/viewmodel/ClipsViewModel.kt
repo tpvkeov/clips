@@ -1,5 +1,6 @@
 package com.example.viewmodel
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import com.example.data.DemoDataFactory
 import com.example.model.AvatarPreset
@@ -19,10 +20,14 @@ import androidx.compose.ui.graphics.Color
 import com.example.ui.theme.AppThemeAccent
 import com.example.ui.theme.ButtonColorTarget
 import com.example.ui.theme.CustomButtonColors
+import com.example.utils.AppUpdateManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 data class SaveFeedbackEvent(
@@ -171,6 +176,12 @@ data class ClipsUiState(
 class ClipsViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
+
+    private val appUpdateManager = AppUpdateManager()
+
+    fun checkForAppUpdate(activity: Activity) {
+        appUpdateManager.checkForUpdate(activity)
+    }
 
     fun getAvatarPreset(id: String): AvatarPreset {
         return DemoDataFactory.avatarPresets.find { it.id == id }

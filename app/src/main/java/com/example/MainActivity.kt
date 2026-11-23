@@ -1,5 +1,4 @@
-package com.example
-
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -28,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -65,6 +65,11 @@ class MainActivity : ComponentActivity() {
 fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.checkForAppUpdate(context as Activity)
+    }
 
     LaunchedEffect(state.feedbackMessage) {
         val message = state.feedbackMessage

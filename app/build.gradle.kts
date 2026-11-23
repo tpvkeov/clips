@@ -91,9 +91,11 @@ dependencies {
   implementation(libs.androidx.camera.core)
   // implementation(libs.androidx.camera.effects)
   implementation(libs.androidx.camera.lifecycle)
-  implementation(libs.androidx.camera.video)
+implementation(libs.androidx.camera.video)
   implementation(libs.androidx.camera.view)
+  // Uncomment to use ML Kit Face Mesh:
   // implementation(libs.mlkit.face.mesh.detection)
+  implementation(libs.play.app.update)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)

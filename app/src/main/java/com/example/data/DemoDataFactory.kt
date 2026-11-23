@@ -395,6 +395,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ ساعة",
             visualStyle = MediaVisualStyle.CYBER_CITY,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v1_cyber_city.mp4",
             isMine = true,
             musicTitle = "إيقاع ليلي هادئ • Neon Drift",
             comments = listOf(
@@ -417,6 +418,7 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ 3 ساعات",
             visualStyle = MediaVisualStyle.TECH_WAVE,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v2_tech_wave.mp4",
             musicTitle = "صوت الانتقال الحركي • Studio Beat"
         ),
         VideoItem(
@@ -434,6 +436,7 @@ object DemoDataFactory {
             category = "ألعاب",
             timeAgo = "منذ 6 ساعات",
             visualStyle = MediaVisualStyle.GAMING_NEON,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v3_gaming.mp4",
             musicTitle = "حماس البداية • Cyber Pulse"
         ),
         VideoItem(
@@ -451,6 +454,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ يوم",
             visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v4_travel_sunset.mp4",
             isMine = true,
             musicTitle = "نسيم الغروب • Acoustic Horizon"
         ),
@@ -469,6 +473,7 @@ object DemoDataFactory {
             category = "تصميم",
             timeAgo = "منذ يومين",
             visualStyle = MediaVisualStyle.DESIGN_GRID,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v5_design.mp4",
             musicTitle = "Lo-Fi التصميم • Chill Vibes"
         ),
         VideoItem(
@@ -486,6 +491,7 @@ object DemoDataFactory {
             category = "طبخ",
             timeAgo = "منذ 3 أيام",
             visualStyle = MediaVisualStyle.COOKING_WARM,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v6_cooking.mp4",
             musicTitle = "مطبخ السعادة • Morning Kitchen"
         ),
         VideoItem(
@@ -503,6 +509,7 @@ object DemoDataFactory {
             category = "سفر",
             timeAgo = "منذ 4 أيام",
             visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v7_paragliding.mp4",
             musicTitle = "رياح الحرية • Sky High"
         ),
         VideoItem(
@@ -520,6 +527,7 @@ object DemoDataFactory {
             category = "ألعاب",
             timeAgo = "منذ 5 أيام",
             visualStyle = MediaVisualStyle.GAMING_NEON,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v8_rgb_setup.mp4",
             musicTitle = "نيون جير • Cyber Gear"
         ),
         VideoItem(
@@ -533,10 +541,11 @@ object DemoDataFactory {
             viewsCount = 112000,
             likesCount = 9800,
             sharesCount = 650,
-            orientation = VideoOrientation.VERTICAL,
+orientation = VideoOrientation.VERTICAL,
             category = "تصميم",
             timeAgo = "منذ أسبوع",
             visualStyle = MediaVisualStyle.DESIGN_GRID,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v9_logo_design.mp4",
             musicTitle = "إلهام البصريات • Creator Flow"
         ),
         VideoItem(
@@ -554,6 +563,7 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ أسبوعين",
             visualStyle = MediaVisualStyle.PODCAST_MIC,
+            mediaUriString = "https://github.com/tpvkeov/clips/raw/main/sample-videos/v10_documentary.mp4",
             musicTitle = "نبض السينما • Cinematic Pulse"
         )
     )
