@@ -15,6 +15,12 @@ enum class VideoOrientation {
     VERTICAL
 }
 
+enum class ClipsLayoutMode(val labelAr: String) {
+    PRIMARY("الوضع الأساسي"),
+    CINEMA_PLAYER("وضع المشغل الكامل"),
+    CARDS_SHELF("وضع بطاقات ريلز")
+}
+
 enum class UploadContentType(val labelAr: String, val subtitleAr: String) {
     HORIZONTAL_VIDEO("فيديو أفقي عريض", "يظهر في الرئيسية والمنشورات"),
     VERTICAL_CLIP("فيديو طولي (clips)", "يظهر في وضع clips التفاعلي"),

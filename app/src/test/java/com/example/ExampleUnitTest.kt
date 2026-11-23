@@ -8,6 +8,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 import com.example.viewmodel.ClipsViewModel
 import com.example.data.DemoDataFactory
+import com.example.model.ClipsLayoutMode
+import com.example.model.MainTab
 
 class ExampleUnitTest {
   @Test
@@ -88,5 +90,26 @@ class ExampleUnitTest {
       assertFalse("Clip title ${clip.title} must not contain 'نجم'", clip.title.contains("نجم"))
       assertFalse("Clip title ${clip.title} must not contain 'ستار'", clip.title.contains("ستار"))
     }
+  }
+
+  @Test
+  fun testClipsLayoutModeCyclesThroughAllThreeModes() {
+    val viewModel = ClipsViewModel()
+    assertEquals(ClipsLayoutMode.PRIMARY, viewModel.uiState.value.clipsLayoutMode)
+
+    viewModel.toggleClipsLayoutMode()
+    assertEquals(ClipsLayoutMode.CINEMA_PLAYER, viewModel.uiState.value.clipsLayoutMode)
+
+    viewModel.toggleClipsLayoutMode()
+    assertEquals(ClipsLayoutMode.CARDS_SHELF, viewModel.uiState.value.clipsLayoutMode)
+
+    viewModel.toggleClipsLayoutMode()
+    assertEquals(ClipsLayoutMode.PRIMARY, viewModel.uiState.value.clipsLayoutMode)
+
+    val sixthClipId = viewModel.uiState.value.verticalClips[5].id
+    viewModel.openClipInMode(sixthClipId, ClipsLayoutMode.CINEMA_PLAYER)
+    assertEquals(MainTab.CLIPS, viewModel.uiState.value.currentTab)
+    assertEquals(sixthClipId, viewModel.uiState.value.selectedClipId)
+    assertEquals(ClipsLayoutMode.CINEMA_PLAYER, viewModel.uiState.value.clipsLayoutMode)
   }
 }

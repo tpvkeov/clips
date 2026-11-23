@@ -674,6 +674,7 @@ private fun CreatorClipGridTile(
         MediaSceneArtwork(
             visualStyle = clip.visualStyle,
             mediaUriString = clip.mediaUriString,
+            fillScreen = true,
             modifier = Modifier.fillMaxSize()
         )
         Box(

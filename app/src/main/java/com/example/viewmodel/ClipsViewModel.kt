@@ -3,6 +3,7 @@ package com.example.viewmodel
 import androidx.lifecycle.ViewModel
 import com.example.data.DemoDataFactory
 import com.example.model.AvatarPreset
+import com.example.model.ClipsLayoutMode
 import com.example.model.CommentItem
 import com.example.model.CommentsTarget
 import com.example.model.CreatorChannelInfo
@@ -55,7 +56,7 @@ data class ClipsUiState(
     val activeCreatorHandle: String? = null,
     val followedCreatorHandles: Set<String> = emptySet(),
     val commentsTarget: CommentsTarget? = null,
-    val isClipsAltLayout: Boolean = false,
+    val clipsLayoutMode: ClipsLayoutMode = ClipsLayoutMode.PRIMARY,
     val feedbackMessage: String? = null,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
@@ -314,7 +315,30 @@ class ClipsViewModel : ViewModel() {
 
     fun toggleClipsLayoutMode() {
         _uiState.update { state ->
-            state.copy(isClipsAltLayout = !state.isClipsAltLayout)
+            val nextMode = when (state.clipsLayoutMode) {
+                ClipsLayoutMode.PRIMARY -> ClipsLayoutMode.CINEMA_PLAYER
+                ClipsLayoutMode.CINEMA_PLAYER -> ClipsLayoutMode.CARDS_SHELF
+                ClipsLayoutMode.CARDS_SHELF -> ClipsLayoutMode.PRIMARY
+            }
+            state.copy(clipsLayoutMode = nextMode)
+        }
+    }
+
+    fun selectClipsLayoutMode(mode: ClipsLayoutMode) {
+        _uiState.update { state ->
+            state.copy(clipsLayoutMode = mode)
+        }
+    }
+
+    fun openClipInMode(clipId: String, mode: ClipsLayoutMode) {
+        _uiState.update { state ->
+            state.copy(
+                currentTab = MainTab.CLIPS,
+                selectedClipId = clipId,
+                clipsLayoutMode = mode,
+                activeCreatorHandle = null,
+                isBottomBarVisible = true
+            )
         }
     }
 

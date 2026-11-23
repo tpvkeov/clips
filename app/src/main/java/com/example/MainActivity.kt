@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.model.ClipsLayoutMode
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
 import com.example.ui.components.AddStoryBottomSheet
@@ -132,10 +133,14 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                         MainTab.CLIPS -> ClipsReelsScreen(
                             clips = state.verticalClips,
                             selectedClipId = state.selectedClipId,
-                            isAltLayout = state.isClipsAltLayout,
+                            layoutMode = state.clipsLayoutMode,
                             followedCreatorHandles = state.followedCreatorHandles,
                             onClipConsumed = viewModel::clearSelectedClip,
                             onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
+                            onSelectLayoutMode = viewModel::selectClipsLayoutMode,
+                            onPlayClipFromShelf = { clipId ->
+                                viewModel.openClipInMode(clipId, ClipsLayoutMode.CINEMA_PLAYER)
+                            },
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onToggleLike = viewModel::toggleLikeVideo,
                             onToggleSave = viewModel::toggleSaveVideo,
@@ -144,7 +149,8 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                                 viewModel.openComments(CommentsTarget.Video(videoId))
                             },
                             onShare = viewModel::shareVideo,
-                            onOpenCreatorProfile = viewModel::openCreatorProfile
+                            onOpenCreatorProfile = viewModel::openCreatorProfile,
+                            onBottomBarVisibilityChange = viewModel::setBottomBarVisible
                         )
 
                         MainTab.UPLOAD -> UploadStudioScreen(

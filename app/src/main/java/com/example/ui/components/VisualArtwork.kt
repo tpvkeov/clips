@@ -78,19 +78,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.net.Uri
-import android.widget.VideoView
-import androidx.compose.foundation.layout.aspectRatio
+import android.os.Build
+import android.view.Surface
+import android.view.TextureView
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -443,7 +448,10 @@ fun MediaSceneArtwork(
     modifier: Modifier = Modifier,
     avatarOverlay: AvatarPreset? = null,
     isPlaying: Boolean = false,
-    isMuted: Boolean = false
+    isMuted: Boolean = false,
+    playbackSpeed: Float = 1f,
+    fillScreen: Boolean = false,
+    keepPrepared: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "media_motion")
     val phase by infiniteTransition.animateFloat(
@@ -457,18 +465,13 @@ fun MediaSceneArtwork(
     )
 
     val context = LocalContext.current
-    Box(modifier = modifier) {
+    Box(modifier = modifier.clipToBounds()) {
         if (!mediaUriString.isNullOrBlank()) {
             val isVideo = remember(mediaUriString) { isVideoMediaUri(context, mediaUriString) }
             if (isVideo) {
                 val frameBitmap by produceState<Bitmap?>(initialValue = null, mediaUriString) {
                     value = withContext(Dispatchers.IO) {
                         extractVideoFrameBitmap(context, mediaUriString)
-                    }
-                }
-                val naturalAspect by produceState<Float?>(initialValue = null, mediaUriString) {
-                    value = withContext(Dispatchers.IO) {
-                        extractVideoAspectRatio(context, mediaUriString)
                     }
                 }
                 Box(
@@ -482,66 +485,191 @@ fun MediaSceneArtwork(
                             bitmap = frameBitmap!!.asImageBitmap(),
                             contentDescription = "إطار الفيديو",
                             modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+                            contentScale = if (fillScreen) ContentScale.Crop else ContentScale.Fit
                         )
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0A0F16))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(36.dp),
-                                color = Color(0xFFFF2D55).copy(alpha = 0.6f),
-                                strokeWidth = 3.dp
-                            )
-                        }
+                        FallbackSceneArtwork(
+                            visualStyle = visualStyle,
+                            isPlaying = isPlaying,
+                            phase = phase,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
-                    if (isPlaying) {
+
+                    if (keepPrepared || isPlaying) {
                         key(mediaUriString) {
-                            var activePlayer by remember {
-                                mutableStateOf<MediaPlayer?>(null)
-                            }
-                            LaunchedEffect(isMuted, activePlayer) {
+                            var activePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+                            var isPrepared by remember { mutableStateOf(false) }
+                            var isVideoRendering by remember { mutableStateOf(false) }
+                            var videoSize by remember { mutableStateOf(0 to 0) }
+
+                            val currentIsPlaying by rememberUpdatedState(isPlaying)
+                            val currentIsMuted by rememberUpdatedState(isMuted)
+                            val currentSpeed by rememberUpdatedState(playbackSpeed)
+                            val currentFillScreen by rememberUpdatedState(fillScreen)
+
+                            LaunchedEffect(isPlaying, isPrepared, activePlayer) {
+                                val mp = activePlayer ?: return@LaunchedEffect
+                                if (!isPrepared) return@LaunchedEffect
                                 runCatching {
-                                    val vol = if (isMuted) 0f else 1f
-                                    activePlayer?.setVolume(vol, vol)
+                                    if (isPlaying) {
+                                        if (!mp.isPlaying) mp.start()
+                                        isVideoRendering = true
+                                    } else {
+                                        if (mp.isPlaying) mp.pause()
+                                    }
                                 }
                             }
-                            val videoViewModifier = if (naturalAspect != null && naturalAspect!! > 0f) {
-                                Modifier.aspectRatio(naturalAspect!!)
-                            } else {
-                                Modifier.fillMaxSize()
+
+                            LaunchedEffect(isMuted, isPrepared, activePlayer) {
+                                val mp = activePlayer ?: return@LaunchedEffect
+                                if (!isPrepared) return@LaunchedEffect
+                                val vol = if (isMuted) 0f else 1f
+                                runCatching { mp.setVolume(vol, vol) }
                             }
+
+                            LaunchedEffect(playbackSpeed, isPrepared, isPlaying, activePlayer) {
+                                val mp = activePlayer ?: return@LaunchedEffect
+                                if (!isPrepared || !isPlaying) return@LaunchedEffect
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    runCatching {
+                                        mp.playbackParams = mp.playbackParams.setSpeed(playbackSpeed)
+                                    }
+                                }
+                            }
+
+                            DisposableEffect(mediaUriString) {
+                                onDispose {
+                                    runCatching { activePlayer?.release() }
+                                    activePlayer = null
+                                }
+                            }
+
                             AndroidView(
                                 factory = { ctx ->
-                                    VideoView(ctx).apply {
-                                        setVideoURI(Uri.parse(mediaUriString))
-                                        setOnPreparedListener { mp ->
-                                            activePlayer = mp
-                                            mp.isLooping = true
-                                            runCatching {
-                                                mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                                    TextureView(ctx).apply {
+                                        isOpaque = false
+                                        alpha = 0f
+                                        surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                                            private var attachedSurface: Surface? = null
+
+                                            override fun onSurfaceTextureAvailable(
+                                                surfaceTexture: SurfaceTexture,
+                                                width: Int,
+                                                height: Int
+                                            ) {
+                                                val surf = Surface(surfaceTexture)
+                                                attachedSurface = surf
+                                                val mp = MediaPlayer()
+                                                activePlayer = mp
+                                                runCatching {
+                                                    mp.setSurface(surf)
+                                                    mp.setDataSource(ctx, Uri.parse(mediaUriString))
+                                                    mp.isLooping = true
+                                                    mp.setOnVideoSizeChangedListener { _, vw, vh ->
+                                                        videoSize = vw to vh
+                                                        applyTextureScaleTransform(
+                                                            this@apply,
+                                                            vw,
+                                                            vh,
+                                                            currentFillScreen
+                                                        )
+                                                    }
+                                                    mp.setOnInfoListener { _, what, _ ->
+                                                        if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                                                            isVideoRendering = true
+                                                            alpha = 1f
+                                                        }
+                                                        false
+                                                    }
+                                                    mp.setOnPreparedListener { preparedMp ->
+                                                        isPrepared = true
+                                                        videoSize = preparedMp.videoWidth to preparedMp.videoHeight
+                                                        applyTextureScaleTransform(
+                                                            this@apply,
+                                                            preparedMp.videoWidth,
+                                                            preparedMp.videoHeight,
+                                                            currentFillScreen
+                                                        )
+                                                        val vol = if (currentIsMuted) 0f else 1f
+                                                        runCatching { preparedMp.setVolume(vol, vol) }
+                                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentSpeed != 1f) {
+                                                            runCatching {
+                                                                preparedMp.playbackParams =
+                                                                    preparedMp.playbackParams.setSpeed(currentSpeed)
+                                                            }
+                                                        }
+                                                        if (currentIsPlaying) {
+                                                            runCatching { preparedMp.start() }
+                                                            isVideoRendering = true
+                                                            alpha = 1f
+                                                        }
+                                                    }
+                                                    mp.setOnErrorListener { errMp, _, _ ->
+                                                        isPrepared = false
+                                                        isVideoRendering = false
+                                                        alpha = 0f
+                                                        runCatching { errMp.release() }
+                                                        true
+                                                    }
+                                                    mp.prepareAsync()
+                                                }
                                             }
-                                            val vol = if (isMuted) 0f else 1f
-                                            runCatching { mp.setVolume(vol, vol) }
-                                            start()
+
+                                            override fun onSurfaceTextureSizeChanged(
+                                                surfaceTexture: SurfaceTexture,
+                                                width: Int,
+                                                height: Int
+                                            ) {
+                                                applyTextureScaleTransform(
+                                                    this@apply,
+                                                    videoSize.first,
+                                                    videoSize.second,
+                                                    currentFillScreen
+                                                )
+                                            }
+
+                                            override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+                                                runCatching { activePlayer?.release() }
+                                                activePlayer = null
+                                                isPrepared = false
+                                                isVideoRendering = false
+                                                runCatching { attachedSurface?.release() }
+                                                attachedSurface = null
+                                                return true
+                                            }
+
+                                            override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
                                         }
-                                        setOnErrorListener { _, _, _ -> true }
                                     }
                                 },
-                                update = { videoView ->
-                                    if (!videoView.isPlaying) {
-                                        runCatching { videoView.start() }
-                                    }
+                                update = { tv ->
+                                    tv.alpha = if (isVideoRendering) 1f else 0f
+                                    applyTextureScaleTransform(
+                                        tv,
+                                        videoSize.first,
+                                        videoSize.second,
+                                        fillScreen
+                                    )
                                 },
-                                modifier = videoViewModifier
+                                modifier = Modifier.fillMaxSize()
                             )
+
+                            if (isPlaying && !isVideoRendering) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = Color(0xFFFF2D55),
+                                        strokeWidth = 2.5.dp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -554,29 +682,68 @@ fun MediaSceneArtwork(
                 )
             }
         } else {
-            when (visualStyle) {
-                MediaVisualStyle.STUDIO_PHOTO -> {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_video_studio),
-                        contentDescription = "استوديو التصوير",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+            FallbackSceneArtwork(
+                visualStyle = visualStyle,
+                isPlaying = isPlaying,
+                phase = phase,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (avatarOverlay != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF0E1722).copy(alpha = 0.62f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HighQualityAvatarView(preset = avatarOverlay, size = 24.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = avatarOverlay.nameAr,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                MediaVisualStyle.CYBER_CITY -> {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_reel_cyber_city),
-                        contentDescription = "مدينة الأضواء",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                else -> {
-                    val activePhase = if (isPlaying) phase else 0.4f
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val w = size.width
-                        val h = size.height
-                        when (visualStyle) {
+            }
+        }
+    }
+}
+
+@Composable
+private fun FallbackSceneArtwork(
+    visualStyle: MediaVisualStyle,
+    isPlaying: Boolean,
+    phase: Float,
+    modifier: Modifier = Modifier
+) {
+    when (visualStyle) {
+        MediaVisualStyle.STUDIO_PHOTO -> {
+            Image(
+                painter = painterResource(id = R.drawable.img_video_studio),
+                contentDescription = "استوديو التصوير",
+                modifier = modifier,
+                contentScale = ContentScale.Crop
+            )
+        }
+        MediaVisualStyle.CYBER_CITY -> {
+            Image(
+                painter = painterResource(id = R.drawable.img_reel_cyber_city),
+                contentDescription = "مدينة الأضواء",
+                modifier = modifier,
+                contentScale = ContentScale.Crop
+            )
+        }
+        else -> {
+            val activePhase = if (isPlaying) phase else 0.4f
+            Canvas(modifier = modifier) {
+                val w = size.width
+                val h = size.height
+                when (visualStyle) {
                             MediaVisualStyle.TECH_WAVE -> {
                                 // Luminous teal-cobalt editing studio with warm orange & emerald highlights
                                 drawRect(
@@ -850,30 +1017,6 @@ fun MediaSceneArtwork(
                     }
                 }
             }
-        }
-
-        if (avatarOverlay != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(10.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF0E1722).copy(alpha = 0.62f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HighQualityAvatarView(preset = avatarOverlay, size = 24.dp)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = avatarOverlay.nameAr,
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1121,29 +1264,53 @@ private fun isVideoMediaUri(context: Context, uriString: String): Boolean {
 }
 
 private fun extractVideoFrameBitmap(context: Context, uriString: String): Bitmap? {
-    return runCatching {
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(context, Uri.parse(uriString))
-        val bmp = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-        retriever.release()
-        bmp
-    }.getOrNull()
+    val retriever = MediaMetadataRetriever()
+    return try {
+        if (uriString.startsWith("http://", ignoreCase = true) ||
+            uriString.startsWith("https://", ignoreCase = true)
+        ) {
+            retriever.setDataSource(uriString, emptyMap())
+        } else {
+            retriever.setDataSource(context, Uri.parse(uriString))
+        }
+        retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+    } catch (_: Throwable) {
+        null
+    } finally {
+        runCatching { retriever.release() }
+    }
 }
 
-private fun extractVideoAspectRatio(context: Context, uriString: String): Float? {
-    return runCatching {
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(context, Uri.parse(uriString))
-        val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
-        val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
-        val rot = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-        retriever.release()
-        val effectiveW = if (rot == 90 || rot == 270) h else w
-        val effectiveH = if (rot == 90 || rot == 270) w else h
-        if (effectiveW > 0 && effectiveH > 0) {
-            (effectiveW.toFloat() / effectiveH.toFloat()).coerceIn(0.4f, 2.5f)
-        } else null
-    }.getOrNull()
+private fun applyTextureScaleTransform(
+    textureView: TextureView,
+    videoWidth: Int,
+    videoHeight: Int,
+    fillScreen: Boolean
+) {
+    val viewWidth = textureView.width.toFloat()
+    val viewHeight = textureView.height.toFloat()
+    if (viewWidth <= 0f || viewHeight <= 0f || videoWidth <= 0 || videoHeight <= 0) return
+
+    val videoAspect = videoWidth.toFloat() / videoHeight.toFloat()
+    val viewAspect = viewWidth / viewHeight
+
+    val (scaleX, scaleY) = if (fillScreen) {
+        if (videoAspect > viewAspect) {
+            (videoAspect / viewAspect) to 1f
+        } else {
+            1f to (viewAspect / videoAspect)
+        }
+    } else {
+        if (videoAspect > viewAspect) {
+            1f to (viewAspect / videoAspect)
+        } else {
+            (videoAspect / viewAspect) to 1f
+        }
+    }
+
+    val matrix = Matrix()
+    matrix.setScale(scaleX, scaleY, viewWidth / 2f, viewHeight / 2f)
+    textureView.setTransform(matrix)
 }
 
 fun formatCompactCount(count: Int): String {
