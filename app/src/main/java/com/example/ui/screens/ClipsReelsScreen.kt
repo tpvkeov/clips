@@ -49,7 +49,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
@@ -58,6 +58,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -102,10 +104,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-// Index of the first clip at which full-screen (cinema) mode is entered automatically.
-// Passing clips 0..4 (the first 5) and reaching the 6th (index 5) triggers full-screen mode.
-private const val FULL_SCREEN_AUTO_ENTER_INDEX = 5
-
 @Composable
 fun ClipsReelsScreen(
     clips: List<VideoItem>,
@@ -141,19 +139,6 @@ fun ClipsReelsScreen(
 
     val pagerState = rememberPagerState(pageCount = { clips.size })
     var showFollowConfirmedBadge by remember { mutableStateOf(false) }
-
-    // Auto-enter full-screen (cinema) mode once the user scrolls past the first 5 clips.
-    // The user can still exit manually via the top exit arrow; this only triggers a single time.
-    var hasAutoEnteredFullScreen by remember { mutableStateOf(false) }
-    LaunchedEffect(pagerState.settledPage, isAltLayout) {
-        if (!hasAutoEnteredFullScreen &&
-            pagerState.settledPage >= FULL_SCREEN_AUTO_ENTER_INDEX &&
-            !isAltLayout
-        ) {
-            hasAutoEnteredFullScreen = true
-            onToggleLayoutMode()
-        }
-    }
 
     LaunchedEffect(showFollowConfirmedBadge) {
         if (showFollowConfirmedBadge) {
@@ -209,57 +194,19 @@ fun ClipsReelsScreen(
             )
         }
 
-        // Top brand image: tapping switches between the primary layout (default) and the compact cinema layout.
-        // In full-screen (cinema) mode this image moves to the top-left and an exit arrow takes the top-right.
-        if (!isAltLayout) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(10.dp)
-                    .minimumInteractiveComponentSize()
-                    .clip(RoundedCornerShape(14.dp))
-                    .testTag("clips_layout_toggle_image")
-                    .clickable(onClick = onToggleLayoutMode),
-                contentAlignment = Alignment.Center
-            ) {
-                ClipsBrandIcon(size = 36.dp)
-            }
-        } else {
-            // Full-screen mode: exit arrow at top-right (replaces the brand icon), clips image at top-left.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(14.dp)
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.42f))
-                    .testTag("clips_exit_fullscreen_button")
-                    .clickable(onClick = onToggleLayoutMode),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowDown,
-                    contentDescription = "الخروج من وضع ملء الشاشة",
-                    tint = Color.White,
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(10.dp)
-                    .minimumInteractiveComponentSize()
-                    .clip(RoundedCornerShape(14.dp))
-                    .testTag("clips_layout_toggle_image_fullscreen")
-                    .clickable(onClick = onToggleLayoutMode),
-                contentAlignment = Alignment.Center
-            ) {
-                ClipsBrandIcon(size = 36.dp)
-            }
+        // Top brand image: tapping switches between the primary layout (default) and the compact cinema layout
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(10.dp)
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(14.dp))
+                .testTag("clips_layout_toggle_image")
+                .clickable(onClick = onToggleLayoutMode),
+            contentAlignment = Alignment.Center
+        ) {
+            ClipsBrandIcon(size = 36.dp)
         }
 
         // Checkmark confirmation overlay with "تمت المتابعة" underneath
@@ -347,6 +294,7 @@ private fun ReelPageItem(
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var isMuted by remember { mutableStateOf(false) }
     var isCleanFocus by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showDoubleTapHeart by remember { mutableStateOf(false) }
 
     LaunchedEffect(isActive) {
@@ -632,7 +580,54 @@ private fun ReelPageItem(
             } else {
                 // ALTERNATE CINEMA LAYOUT (الوضع الثاني عند الضغط على الصورة العلوية)
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Top bar (exit arrow + clips image) is drawn at the screen level in ClipsReelsScreen.
+                    // Top-End More options circle button (matching screenshot)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(14.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.42f))
+                                .clickable { showMoreMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "خيارات المقطع",
+                                tint = Color.White
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(if (clip.isSaved) "إزالة من المحفوظات" else "حفظ المقطع") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onToggleSave()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("مشاركة المقطع") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onShare()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("العودة للوضع الأساسي") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onToggleLayoutMode()
+                                }
+                            )
+                        }
+                    }
 
                     // Bottom Creator Row + Horizontal Pill Actions + Compact Player Bar
                     Column(
@@ -640,7 +635,7 @@ private fun ReelPageItem(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(bottom = 10.dp)
+                            .padding(bottom = 66.dp)
                     ) {
                         AnimatedVisibility(visible = !isCleanFocus) {
                             Column(
