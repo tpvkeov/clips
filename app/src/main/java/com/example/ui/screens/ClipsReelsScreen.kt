@@ -197,6 +197,7 @@ fun ClipsReelsScreen(
                 clip = clip,
                 isActive = isCurrentPage,
                 isAltLayout = isAltLayout,
+                isImmersive = isImmersive,
                 isFollowing = isFollowing,
                 creatorAvatar = getAvatarPreset(clip.creatorAvatarId),
                 overlayAvatar = clip.avatarOverlayId?.let(getAvatarPreset),
@@ -342,6 +343,7 @@ private fun ReelPageItem(
     clip: VideoItem,
     isActive: Boolean,
     isAltLayout: Boolean,
+    isImmersive: Boolean = false,
     isFollowing: Boolean,
     creatorAvatar: AvatarPreset,
     overlayAvatar: AvatarPreset?,
@@ -496,7 +498,12 @@ private fun ReelPageItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(bottom = 92.dp, start = 16.dp, end = 14.dp)
+                            // In immersive mode the bottom bar is gone, so let the side icons sit lower.
+                            .padding(
+                                bottom = if (isImmersive) 16.dp else 92.dp,
+                                start = 16.dp,
+                                end = 14.dp
+                            )
                     ) {
                         // Side action column (End / Left in RTL)
                         Column(
@@ -581,12 +588,13 @@ private fun ReelPageItem(
                             )
                         }
 
-                        // Creator info & caption (Start / Right in RTL)
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth(0.76f)
-                        ) {
+                        // Creator info & caption (Start / Right in RTL) — hidden in immersive mode.
+                        if (!isImmersive) {
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth(0.76f)
+                            ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
@@ -627,6 +635,7 @@ private fun ReelPageItem(
                             )
                         }
                     }
+                }
 
                     // Playback timeline bar positioned cleanly right above the bottom navigation bar
                     LinearProgressIndicator(
