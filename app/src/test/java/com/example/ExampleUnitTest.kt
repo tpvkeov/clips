@@ -9,6 +9,8 @@ import org.junit.Test
 import com.example.viewmodel.ClipsViewModel
 import com.example.data.DemoDataFactory
 import com.example.data.ReelsFeedSelector
+import com.example.update.AppUpdateChecker
+import com.example.update.UpdateCheckResult
 import com.example.model.ClipsLayoutMode
 import com.example.model.MainTab
 import com.example.model.VideoOrientation
@@ -231,5 +233,38 @@ class ExampleUnitTest {
     )
 
     assertTrue(feed.any { it.id == wide.id })
+  }
+
+  @Test
+  fun testUpdateCheckerPicksLatestOnlyWhenItIsNewer() {
+    val manifest = """
+      {
+        "versionCode": 1031,
+        "versionName": "1.0.1031",
+        "apkUrl": "https://raw.githubusercontent.com/tpvkeov/clips-updates/main/app-debug.apk",
+        "notes": "أحدث نسخة"
+      }
+    """.trimIndent()
+
+    val newer = AppUpdateChecker.parse(manifest, currentVersionCode = 1030)
+    assertTrue(newer is UpdateCheckResult.Available)
+    assertEquals(1031, (newer as UpdateCheckResult.Available).info.versionCode)
+    assertEquals("1.0.1031", newer.info.versionName)
+
+    assertTrue(
+      AppUpdateChecker.parse(manifest, currentVersionCode = 1031) is UpdateCheckResult.UpToDate
+    )
+    assertTrue(
+      AppUpdateChecker.parse(manifest, currentVersionCode = 1032) is UpdateCheckResult.UpToDate
+    )
+    assertTrue(
+      AppUpdateChecker.parse("{}", currentVersionCode = 1030) is UpdateCheckResult.Failed
+    )
+    assertTrue(
+      AppUpdateChecker.parse(
+        manifest.replace("https://", "http://"),
+        currentVersionCode = 1030
+      ) is UpdateCheckResult.Failed
+    )
   }
 }

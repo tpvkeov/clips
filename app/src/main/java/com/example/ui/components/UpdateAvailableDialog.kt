@@ -31,12 +31,13 @@ import com.example.update.AppUpdateInfo
 import kotlinx.coroutines.delay
 import java.io.File
 
-private const val APK_FILE_NAME = "clips-update.apk"
+private const val APK_FILE_PREFIX = "clips-update-"
 
-/** Shows when a newer public APK manifest is found, then downloads and installs it. */
+/** Shows when a newer public APK manifest is found, then downloads and installs it once. */
 @Composable
 fun UpdateAvailableDialog(
     info: AppUpdateInfo,
+    onUpdateStarted: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -44,12 +45,46 @@ fun UpdateAvailableDialog(
         context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     }
     var downloadId by remember { mutableStateOf<Long?>(null) }
+    var isStarting by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var waitingForPermission by remember { mutableStateOf(false) }
 
+    fun apkFileName(): String = "$APK_FILE_PREFIX${info.versionCode}.apk"
+
     fun downloadedFile(): File =
-        File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), APK_FILE_NAME)
+        File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), apkFileName())
+
+    /** Never leave two downloads racing for the same APK, even after a process restart. */
+    fun cancelExistingDownloads() {
+        val query = DownloadManager.Query().setFilterByStatus(
+            DownloadManager.STATUS_PENDING or DownloadManager.STATUS_RUNNING
+        )
+        runCatching {
+            downloadManager.query(query)?.use { cursor ->
+                val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+                val uriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_URI)
+                if (idIndex < 0) return@use
+                while (cursor.moveToNext()) {
+                    val existingUri = if (uriIndex >= 0) cursor.getString(uriIndex) else null
+                    if (existingUri?.substringBefore('?') == info.apkUrl) {
+                        downloadManager.remove(cursor.getLong(idIndex))
+                    }
+                }
+            }
+        }
+    }
+
+    fun cleanOldApkFiles() {
+        runCatching {
+            val currentName = apkFileName()
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?.listFiles()
+                ?.filter { it.name.startsWith(APK_FILE_PREFIX) && it.name.endsWith(".apk") }
+                ?.filterNot { it.name == currentName }
+                ?.forEach { runCatching { it.delete() } }
+        }
+    }
 
     fun installApk() {
         val file = downloadedFile()
@@ -72,25 +107,42 @@ fun UpdateAvailableDialog(
     }
 
     fun startDownload() {
+        if (isStarting || (downloadId != null && errorMessage == null)) return
+        isStarting = true
         errorMessage = null
         waitingForPermission = false
-        val request = DownloadManager.Request(Uri.parse(info.apkUrl))
+        cancelExistingDownloads()
+        cleanOldApkFiles()
+        runCatching { downloadedFile().delete() }
+
+        // Fresh APK bytes every time; the manifest already points to the latest build.
+        val apkUri = Uri.parse(info.apkUrl).buildUpon()
+            .appendQueryParameter("t", System.currentTimeMillis().toString())
+            .build()
+        val request = DownloadManager.Request(apkUri)
             .setTitle("تحديث تطبيق Clips")
             .setDescription(info.versionName)
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalFilesDir(
                 context,
                 Environment.DIRECTORY_DOWNLOADS,
-                APK_FILE_NAME
+                apkFileName()
             )
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
+
+        downloadId = null
         runCatching { downloadManager.enqueue(request) }
-            .onSuccess { downloadId = it }
+            .onSuccess { id ->
+                downloadId = id
+                onUpdateStarted(info.versionCode)
+            }
             .onFailure { errorMessage = "تعذر بدء التحميل، تأكد من الإنترنت" }
+        isStarting = false
     }
 
     fun beginUpdate() {
+        if (isStarting || downloadId != null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {

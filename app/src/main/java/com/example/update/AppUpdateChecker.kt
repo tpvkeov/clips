@@ -4,7 +4,6 @@ import android.content.Context
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -19,36 +18,70 @@ data class AppUpdateInfo(
     val notes: String
 )
 
+/** Result of a fresh check. Used by the silent start-up check and the manual button. */
+sealed class UpdateCheckResult {
+    data class Available(val info: AppUpdateInfo) : UpdateCheckResult()
+    object UpToDate : UpdateCheckResult()
+    object Failed : UpdateCheckResult()
+}
+
 object AppUpdateChecker {
     private const val UPDATE_JSON_URL =
         "https://raw.githubusercontent.com/tpvkeov/clips-updates/main/update.json"
 
-    suspend fun check(): AppUpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun check(): UpdateCheckResult = withContext(Dispatchers.IO) {
         val raw = runCatching {
             // Cache-busting query so a freshly published manifest is seen immediately.
             val connection = URL("$UPDATE_JSON_URL?t=${System.currentTimeMillis()}").openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
             connection.inputStream.bufferedReader().use { it.readText() }
-        }.getOrNull() ?: return@withContext null
+        }.getOrNull() ?: return@withContext UpdateCheckResult.Failed
 
-        val info = runCatching {
-            val json = JSONObject(raw)
-            AppUpdateInfo(
-                versionCode = json.optInt("versionCode", -1),
-                versionName = json.optString("versionName", "تحديث جديد"),
-                apkUrl = json.optString("apkUrl", ""),
-                notes = json.optString("notes", "تحسينات وإصلاحات عامة")
-            )
-        }.getOrNull() ?: return@withContext null
-
-        if (info.versionCode <= BuildConfig.VERSION_CODE) return@withContext null
-        if (!info.apkUrl.startsWith("https://")) return@withContext null
-        info
+        parse(raw, BuildConfig.VERSION_CODE)
     }
+
+    /** Convenience for the silent start-up prompt, which only cares about newer builds. */
+    suspend fun checkAvailable(): AppUpdateInfo? = when (val result = check()) {
+        is UpdateCheckResult.Available -> result.info
+        else -> null
+    }
+
+    /** Pure parser so the "latest version" decision can be unit tested on the JVM. */
+    fun parse(raw: String, currentVersionCode: Int): UpdateCheckResult {
+        val versionCode = intField(raw, "versionCode") ?: return UpdateCheckResult.Failed
+        val apkUrl = stringField(raw, "apkUrl") ?: return UpdateCheckResult.Failed
+        if (versionCode <= 0 || !apkUrl.startsWith("https://")) {
+            return UpdateCheckResult.Failed
+        }
+
+        val info = AppUpdateInfo(
+            versionCode = versionCode,
+            versionName = stringField(raw, "versionName") ?: "تحديث جديد",
+            apkUrl = apkUrl,
+            notes = stringField(raw, "notes") ?: "تحسينات وإصلاحات عامة"
+        )
+        return if (info.versionCode <= currentVersionCode) {
+            UpdateCheckResult.UpToDate
+        } else {
+            UpdateCheckResult.Available(info)
+        }
+    }
+
+    private fun intField(raw: String, key: String): Int? =
+        Regex("\"$key\"\\s*:\\s*(-?\\d+)").find(raw)?.groupValues?.get(1)?.toIntOrNull()
+
+    private fun stringField(raw: String, key: String): String? =
+        Regex("\"$key\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"")
+            .find(raw)
+            ?.groupValues
+            ?.get(1)
+            ?.replace("\\\"", "\"")
+            ?.replace("\\\\", "\\")
+            ?.replace("\\n", "\n")
 }
 
-/** Remembers which update version the user chose to skip. */
+/** Remembers which update version the user already handled, so it never repeats. */
 class UpdatePreferences(context: Context) {
     private val preferences = context.applicationContext
         .getSharedPreferences("clips_app_update", Context.MODE_PRIVATE)
@@ -60,7 +93,18 @@ class UpdatePreferences(context: Context) {
         preferences.edit().putInt(KEY_DISMISSED_VERSION, versionCode).apply()
     }
 
+    fun isUpdateStarted(versionCode: Int): Boolean =
+        preferences.getInt(KEY_STARTED_VERSION, -1) == versionCode
+
+    fun markUpdateStarted(versionCode: Int) {
+        preferences.edit().putInt(KEY_STARTED_VERSION, versionCode).apply()
+    }
+
+    fun isHandled(versionCode: Int): Boolean =
+        isDismissed(versionCode) || isUpdateStarted(versionCode)
+
     private companion object {
         const val KEY_DISMISSED_VERSION = "dismissed_version_code"
+        const val KEY_STARTED_VERSION = "started_version_code"
     }
 }

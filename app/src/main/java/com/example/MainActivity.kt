@@ -30,6 +30,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,7 @@ import com.example.ui.components.StoryViewerOverlay
 import com.example.ui.components.UpdateAvailableDialog
 import com.example.update.AppUpdateChecker
 import com.example.update.AppUpdateInfo
+import com.example.update.UpdateCheckResult
 import com.example.update.UpdatePreferences
 import com.example.ui.screens.ClipsReelsScreen
 import com.example.ui.screens.CreatorProfileScreen
@@ -67,6 +69,7 @@ import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.UploadStudioScreen
 import com.example.ui.theme.ClipsTheme
 import com.example.viewmodel.ClipsViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,12 +114,38 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
 
     var pendingPostScrollId by remember { mutableStateOf<String?>(null) }
 
-    // Silently check the public update manifest once per app start.
+    // Silently check the public update manifest once per app start. A version the
+    // user already skipped or started downloading is never auto-prompted again.
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    val updateCheckScope = rememberCoroutineScope()
+
     LaunchedEffect(Unit) {
-        val info = AppUpdateChecker.check()
-        if (info != null && !UpdatePreferences(appContext).isDismissed(info.versionCode)) {
+        val info = AppUpdateChecker.checkAvailable()
+        if (info != null && !UpdatePreferences(appContext).isHandled(info.versionCode)) {
             updateInfo = info
+        }
+    }
+
+    // Manual check always fetches the newest manifest, even if an older update
+    // was skipped or is already downloading.
+    fun checkForUpdatesManually() {
+        if (isCheckingUpdate) return
+        isCheckingUpdate = true
+        updateCheckScope.launch {
+            try {
+                when (val result = AppUpdateChecker.check()) {
+                    is UpdateCheckResult.Available -> updateInfo = result.info
+                    UpdateCheckResult.UpToDate -> snackbarHostState.showSnackbar(
+                        "أنت على أحدث نسخة بالفعل ✅"
+                    )
+                    UpdateCheckResult.Failed -> snackbarHostState.showSnackbar(
+                        "تعذر التحقق من التحديثات، تأكد من الإنترنت"
+                    )
+                }
+            } finally {
+                isCheckingUpdate = false
+            }
         }
     }
 
@@ -263,6 +292,9 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onSetButtonColor = viewModel::setButtonCustomColor,
                             onResetButtonColors = viewModel::resetCustomButtonColors,
                             onToggleDarkMode = viewModel::toggleDarkMode,
+                            currentVersionName = BuildConfig.VERSION_NAME,
+                            isCheckingUpdate = isCheckingUpdate,
+                            onCheckForUpdates = ::checkForUpdatesManually,
                             onOpenVideo = viewModel::openVideoPlayer,
                             onJumpToClipsTab = { viewModel.selectTab(MainTab.CLIPS) },
                             onUpdateProfile = viewModel::updateProfile,
@@ -399,13 +431,18 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                 )
 
                 updateInfo?.let { info ->
-                    UpdateAvailableDialog(
-                        info = info,
-                        onDismiss = {
-                            UpdatePreferences(appContext).dismiss(info.versionCode)
-                            updateInfo = null
-                        }
-                    )
+                    key(info.versionCode) {
+                        UpdateAvailableDialog(
+                            info = info,
+                            onUpdateStarted = { versionCode ->
+                                UpdatePreferences(appContext).markUpdateStarted(versionCode)
+                            },
+                            onDismiss = {
+                                UpdatePreferences(appContext).dismiss(info.versionCode)
+                                updateInfo = null
+                            }
+                        )
+                    }
                 }
             }
             }

@@ -36,9 +36,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -107,6 +109,9 @@ fun ProfileScreen(
     onSetButtonColor: (ButtonColorTarget, Color?) -> Unit,
     onResetButtonColors: () -> Unit,
     onToggleDarkMode: () -> Unit,
+    currentVersionName: String,
+    isCheckingUpdate: Boolean,
+    onCheckForUpdates: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onJumpToClipsTab: () -> Unit,
     onUpdateProfile: (name: String, bio: String, avatarPresetId: String) -> Unit,
@@ -608,6 +613,54 @@ fun ProfileScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 3b. One-tap check for the newest published version
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("profile_check_updates_button")
+                        .clickable(enabled = !isCheckingUpdate) { onCheckForUpdates() }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SystemUpdate,
+                        contentDescription = "التحقق من التحديثات",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isCheckingUpdate) "جاري التحقق من أحدث نسخة..." else "التحقق من التحديثات",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "الإصدار الحالي $currentVersionName",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
                     }
                 }
             }
