@@ -133,6 +133,8 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                             clips = state.verticalClips,
                             selectedClipId = state.selectedClipId,
                             isAltLayout = state.isClipsAltLayout,
+                            isImmersive = state.isClipsImmersive,
+                            onImmersiveChange = viewModel::setClipsImmersive,
                             followedCreatorHandles = state.followedCreatorHandles,
                             onClipConsumed = viewModel::clearSelectedClip,
                             onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
@@ -191,10 +193,10 @@ fun ClipsRootApp(viewModel: ClipsViewModel = viewModel()) {
                 }
 
                 // Oval translucent floating pill navigation bar that hides/shows on scroll.
-                // Hidden while viewing the Clips reels so the videos use the full screen height.
+                // Hidden while the Clips reels are in immersive (full-screen) mode.
                 FloatingPillBottomBar(
                     currentTab = state.currentTab,
-                    visible = state.isBottomBarVisible && state.currentTab != MainTab.CLIPS,
+                    visible = state.isBottomBarVisible && !state.isClipsImmersive,
                     onSelectTab = viewModel::selectTab,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )

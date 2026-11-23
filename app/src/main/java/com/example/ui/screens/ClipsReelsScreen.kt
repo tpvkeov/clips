@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -104,12 +105,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+// Index of the first clip at which immersive (full-screen) mode is entered automatically.
+// Passing clips 0..4 (the first 5) and reaching the 6th (index 5) triggers immersive mode.
+private const val IMMERSIVE_AUTO_ENTER_INDEX = 5
+
 @Composable
 fun ClipsReelsScreen(
     clips: List<VideoItem>,
     selectedClipId: String? = null,
     isAltLayout: Boolean = false,
     followedCreatorHandles: Set<String> = emptySet(),
+    isImmersive: Boolean = false,
+    onImmersiveChange: (Boolean) -> Unit = {},
     onClipConsumed: () -> Unit = {},
     onToggleLayoutMode: () -> Unit = {},
     getAvatarPreset: (String) -> AvatarPreset,
@@ -139,6 +146,21 @@ fun ClipsReelsScreen(
 
     val pagerState = rememberPagerState(pageCount = { clips.size })
     var showFollowConfirmedBadge by remember { mutableStateOf(false) }
+
+    // Track whether the user has manually dismissed immersive mode, so we don't force it back
+    // while they keep scrolling forward after pressing the exit arrow.
+    var userDismissedImmersive by remember { mutableStateOf(false) }
+
+    // Once the user scrolls past the first 5 clips, enter immersive mode (keep the default layout,
+    // but move the brand to the left, show an exit arrow on the right, and hide the bottom bar).
+    LaunchedEffect(pagerState.settledPage, isImmersive) {
+        if (!userDismissedImmersive &&
+            !isImmersive &&
+            pagerState.settledPage >= IMMERSIVE_AUTO_ENTER_INDEX
+        ) {
+            onImmersiveChange(true)
+        }
+    }
 
     LaunchedEffect(showFollowConfirmedBadge) {
         if (showFollowConfirmedBadge) {
@@ -194,19 +216,61 @@ fun ClipsReelsScreen(
             )
         }
 
-        // Top brand image: tapping switches between the primary layout (default) and the compact cinema layout
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(10.dp)
-                .minimumInteractiveComponentSize()
-                .clip(RoundedCornerShape(14.dp))
-                .testTag("clips_layout_toggle_image")
-                .clickable(onClick = onToggleLayoutMode),
-            contentAlignment = Alignment.Center
-        ) {
-            ClipsBrandIcon(size = 36.dp)
+        // Top brand image: tapping switches between the primary layout (default) and the compact cinema layout.
+        // In immersive mode (after 5 clips) the brand moves to the top-left and an exit arrow shows top-right.
+        if (!isImmersive) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(10.dp)
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .testTag("clips_layout_toggle_image")
+                    .clickable(onClick = onToggleLayoutMode),
+                contentAlignment = Alignment.Center
+            ) {
+                ClipsBrandIcon(size = 36.dp)
+            }
+        } else {
+            // Exit arrow on the top-right (RTL start) to leave immersive mode.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(14.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.42f))
+                    .minimumInteractiveComponentSize()
+                    .clickable {
+                        userDismissedImmersive = true
+                        onImmersiveChange(false)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = "الخروج من الوضع",
+                    tint = Color.White,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+
+            // Brand image on the top-left (RTL end), keeping its layout-toggle function.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(10.dp)
+                    .minimumInteractiveComponentSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .testTag("clips_layout_toggle_image_immersive")
+                    .clickable(onClick = onToggleLayoutMode),
+                contentAlignment = Alignment.Center
+            ) {
+                ClipsBrandIcon(size = 36.dp)
+            }
         }
 
         // Checkmark confirmation overlay with "تمت المتابعة" underneath

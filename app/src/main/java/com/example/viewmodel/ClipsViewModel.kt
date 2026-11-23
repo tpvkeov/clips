@@ -56,6 +56,7 @@ data class ClipsUiState(
     val followedCreatorHandles: Set<String> = emptySet(),
     val commentsTarget: CommentsTarget? = null,
     val isClipsAltLayout: Boolean = false,
+    val isClipsImmersive: Boolean = false,
     val feedbackMessage: String? = null,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
@@ -180,7 +181,9 @@ class ClipsViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 currentTab = tab,
-                isBottomBarVisible = true
+                isBottomBarVisible = true,
+                // Leaving the Clips tab always exits immersive mode.
+                isClipsImmersive = if (tab == MainTab.CLIPS) it.isClipsImmersive else false
             )
         }
     }
@@ -315,6 +318,13 @@ class ClipsViewModel : ViewModel() {
     fun toggleClipsLayoutMode() {
         _uiState.update { state ->
             state.copy(isClipsAltLayout = !state.isClipsAltLayout)
+        }
+    }
+
+    fun setClipsImmersive(immersive: Boolean) {
+        _uiState.update { state ->
+            if (state.isClipsImmersive == immersive) state
+            else state.copy(isClipsImmersive = immersive)
         }
     }
 
