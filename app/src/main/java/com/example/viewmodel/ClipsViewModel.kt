@@ -8,6 +8,7 @@ import com.example.data.DailyShareRewardState
 import com.example.data.DailyShareRewardStore
 import com.example.data.DemoDataFactory
 import com.example.data.DemoVideoCache
+import com.example.data.ReelsFeedSelector
 import com.example.data.WatchProgress
 import com.example.model.AvatarPreset
 import com.example.model.ClipsLayoutMode
@@ -102,6 +103,14 @@ data class ClipsUiState(
                 video.category.contains(q, ignoreCase = true)
             matchesCategory && matchesQuery
         }
+
+    /** Reels are vertical-only apart from one rare, high-quality widescreen exception. */
+    val reelsClips: List<VideoItem>
+        get() = ReelsFeedSelector.build(
+            verticalClips = verticalClips,
+            horizontalVideos = horizontalVideos,
+            pinnedVideoId = selectedClipId
+        )
 
     val savedItems: List<VideoItem>
         get() = (horizontalVideos + verticalClips).filter { it.isSaved }

@@ -194,7 +194,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
 
                         MainTab.CLIPS -> key(state.clipsSessionToken) {
                             ClipsReelsScreen(
-                                clips = state.verticalClips,
+                                clips = state.reelsClips,
                                 selectedClipId = state.selectedClipId,
                                 initialProgress = if (state.selectedClipId == state.resumeCandidateId) {
                                     state.lastWatched?.progress ?: 0f

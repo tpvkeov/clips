@@ -218,6 +218,9 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ ساعتين",
             visualStyle = MediaVisualStyle.STUDIO_PHOTO,
+            // One rare, genuinely deserving widescreen reels exception: original
+            // 1080p source, played fitted at full quality inside the reels feed.
+            mediaUriString = "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
             isMine = true,
             comments = listOf(
                 CommentItem("c1", "كريم عادل", "av_lens", "الإضاءة الجانبية أعطت عمق خرافي للمشهد!", "منذ ساعة"),

@@ -8,8 +8,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 import com.example.viewmodel.ClipsViewModel
 import com.example.data.DemoDataFactory
+import com.example.data.ReelsFeedSelector
 import com.example.model.ClipsLayoutMode
 import com.example.model.MainTab
+import com.example.model.VideoOrientation
 
 class ExampleUnitTest {
   @Test
@@ -145,5 +147,42 @@ class ExampleUnitTest {
     viewModel.playNewClips()
     assertNull(viewModel.uiState.value.selectedClipId)
     assertEquals(session + 1, viewModel.uiState.value.clipsSessionToken)
+  }
+
+  @Test
+  fun testReelsFeedStaysVerticalWithOneRareWideException() {
+    val viewModel = ClipsViewModel()
+    val reels = viewModel.uiState.value.reelsClips
+
+    assertEquals(10, reels.count { it.orientation == VideoOrientation.VERTICAL })
+    assertEquals(1, reels.count { it.orientation == VideoOrientation.HORIZONTAL })
+    val exception = reels.first { it.orientation == VideoOrientation.HORIZONTAL }
+    assertEquals("h1", exception.id)
+    assertNotNull(exception.mediaUriString)
+  }
+
+  @Test
+  fun testReelsSelectorRejectsWeakWideVideos() {
+    val weakWide = DemoDataFactory.initialHorizontalVideos[2].copy(
+      mediaUriString = "https://example.com/low-quality.mp4",
+      viewsCount = 900,
+      likesCount = 10
+    )
+    val feed = ReelsFeedSelector.build(DemoDataFactory.initialVerticalClips, listOf(weakWide))
+
+    assertEquals(DemoDataFactory.initialVerticalClips.size, feed.size)
+    assertTrue(feed.all { it.orientation == VideoOrientation.VERTICAL })
+  }
+
+  @Test
+  fun testReelsSelectorHonoursExplicitlyOpenedWideVideo() {
+    val wide = DemoDataFactory.initialHorizontalVideos[3]
+    val feed = ReelsFeedSelector.build(
+      verticalClips = DemoDataFactory.initialVerticalClips,
+      horizontalVideos = DemoDataFactory.initialHorizontalVideos,
+      pinnedVideoId = wide.id
+    )
+
+    assertTrue(feed.any { it.id == wide.id })
   }
 }
