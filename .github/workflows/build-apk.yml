@@ -42,21 +42,15 @@ jobs:
           echo "name=1.0.$CODE" >> "$GITHUB_OUTPUT"
 
       - name: Prepare debug keystore
+        # All builds MUST use the same signing key, otherwise Android treats each
+        # APK as a different app and updates fail with "package conflicts with
+        # existing package". Never generate a random keystore here.
         run: |
-          if [ -s debug.keystore.base64 ] && [ ! -s debug.keystore ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
+          if [ ! -s debug.keystore.base64 ]; then
+            echo "::error::debug.keystore.base64 is missing - cannot sign APK consistently"
+            exit 1
           fi
-          if [ ! -s debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          base64 -d debug.keystore.base64 > debug.keystore
 
       - name: Build Debug APK
         env:
