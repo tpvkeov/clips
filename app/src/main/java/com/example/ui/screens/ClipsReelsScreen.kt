@@ -108,9 +108,12 @@ import java.util.Locale
 fun ClipsReelsScreen(
     clips: List<VideoItem>,
     selectedClipId: String? = null,
+    initialProgress: Float = 0f,
     layoutMode: ClipsLayoutMode = ClipsLayoutMode.PRIMARY,
     followedCreatorHandles: Set<String> = emptySet(),
     onClipConsumed: () -> Unit = {},
+    onWatchProgress: (String, Float) -> Unit = { _, _ -> },
+    onPlayNewClips: () -> Unit = {},
     onToggleLayoutMode: () -> Unit = {},
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit = {},
     getAvatarPreset: (String) -> AvatarPreset,
@@ -193,6 +196,8 @@ fun ClipsReelsScreen(
                         ReelPageItem(
                             clip = clip,
                             isActive = isCurrentPage,
+                            initialProgress = initialProgress,
+                            onWatchProgress = onWatchProgress,
                             isCinemaMode = layoutMode == ClipsLayoutMode.CINEMA_PLAYER,
                             isBottomBarVisible = isBottomBarVisible,
                             isFollowing = isFollowing,
@@ -215,7 +220,7 @@ fun ClipsReelsScreen(
                         )
                     }
 
-                    // Top brand image: tapping cycles between Primary -> Cinema Player -> Reels Cards Shelf
+                    // Top brand image: tapping cycles between Primary and Cinema Player
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -228,6 +233,28 @@ fun ClipsReelsScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         ClipsBrandIcon(size = 38.dp)
+                    }
+
+                    // One tap jumps straight to the newest clips instead of a saved position.
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color.Black.copy(alpha = 0.52f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .statusBarsPadding()
+                            .padding(12.dp)
+                            .clip(RoundedCornerShape(50))
+                            .testTag("clips_play_new_button")
+                            .clickable(onClick = onPlayNewClips)
+                    ) {
+                        Text(
+                            text = "جديد ▶",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
                     }
                 }
 
@@ -326,6 +353,8 @@ fun ClipsReelsScreen(
 private fun ReelPageItem(
     clip: VideoItem,
     isActive: Boolean,
+    initialProgress: Float = 0f,
+    onWatchProgress: (String, Float) -> Unit = { _, _ -> },
     isCinemaMode: Boolean,
     isBottomBarVisible: Boolean,
     isFollowing: Boolean,
@@ -341,22 +370,28 @@ private fun ReelPageItem(
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit
 ) {
     var isPlaying by remember(clip.id, isActive) { mutableStateOf(isActive) }
-    var progress by remember(clip.id) { mutableFloatStateOf(0.05f) }
+    var progress by remember(clip.id) {
+        mutableFloatStateOf(if (initialProgress in 0.02f..0.95f) initialProgress else 0.05f)
+    }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var isMuted by remember { mutableStateOf(false) }
     var isCleanFocus by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showDoubleTapHeart by remember { mutableStateOf(false) }
+    var showSpeedBadge by remember { mutableStateOf(false) }
 
     LaunchedEffect(isActive) {
         isPlaying = isActive
     }
 
     LaunchedEffect(isPlaying, isActive, playbackSpeed) {
+        var steps = 0
         while (isPlaying && isActive) {
             val stepDelay = (120f / playbackSpeed).toLong().coerceIn(40L, 260L)
             delay(stepDelay)
             progress = if (progress >= 1f) 0f else progress + 0.008f
+            steps++
+            if (steps % 20 == 0) onWatchProgress(clip.id, progress)
         }
     }
 
@@ -367,10 +402,28 @@ private fun ReelPageItem(
         }
     }
 
+    LaunchedEffect(showSpeedBadge) {
+        if (showSpeedBadge) {
+            delay(900L)
+            showSpeedBadge = false
+        }
+    }
+
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val likeShakeRotation = remember { Animatable(0f) }
     val likePulseScale = remember { Animatable(1f) }
+
+    fun cyclePlaybackSpeed() {
+        playbackSpeed = when (playbackSpeed) {
+            1f -> 1.5f
+            1.5f -> 2f
+            2f -> 0.5f
+            else -> 1f
+        }
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        showSpeedBadge = true
+    }
 
     fun triggerLikeShakeAndHaptic() {
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -428,7 +481,8 @@ private fun ReelPageItem(
                         if (!clip.isLiked) onToggleLike()
                         triggerLikeShakeAndHaptic()
                         showDoubleTapHeart = true
-                    }
+                    },
+                    onLongPress = { cyclePlaybackSpeed() }
                 )
             }
     ) {
@@ -467,6 +521,35 @@ private fun ReelPageItem(
             visible = showDoubleTapHeart,
             onFinished = { showDoubleTapHeart = false }
         )
+
+        AnimatedVisibility(
+            visible = showSpeedBadge,
+            enter = fadeIn() + scaleIn(initialScale = 0.82f),
+            exit = fadeOut() + scaleOut(targetScale = 0.92f),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .testTag("clips_speed_badge")
+        ) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color.Black.copy(alpha = 0.78f),
+                border = BorderStroke(1.dp, secondaryAccent.copy(alpha = 0.8f)),
+                shadowElevation = 8.dp
+            ) {
+                val speedText = if (playbackSpeed % 1f == 0f) {
+                    "${playbackSpeed.toInt()}x"
+                } else {
+                    "${playbackSpeed}x"
+                }
+                Text(
+                    text = "السرعة $speedText",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp)
+                )
+            }
+        }
 
         AnimatedContent(
             targetState = isCinemaMode,
@@ -919,14 +1002,7 @@ private fun ReelPageItem(
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
                                         .clip(RoundedCornerShape(10.dp))
-                                        .clickable {
-                                            playbackSpeed = when (playbackSpeed) {
-                                                1f -> 1.5f
-                                                1.5f -> 2f
-                                                2f -> 0.5f
-                                                else -> 1f
-                                            }
-                                        }
+                                        .clickable { cyclePlaybackSpeed() }
                                         .padding(horizontal = 10.dp, vertical = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {

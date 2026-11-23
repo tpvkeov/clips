@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,9 +26,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Image
@@ -34,6 +38,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
@@ -51,6 +56,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +77,7 @@ import com.example.model.AvatarPreset
 import com.example.model.MediaVisualStyle
 import com.example.model.PostItem
 import com.example.model.UserProfile
+import com.example.model.VideoItem
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.MediaSceneArtwork
@@ -84,8 +91,15 @@ fun PostsScreen(
     userProfile: UserProfile,
     getAvatarPreset: (String) -> AvatarPreset,
     onToggleLikePost: (String) -> Unit,
+    onToggleSavePost: (String) -> Unit,
     onOpenComments: (String) -> Unit,
     onSharePost: (String) -> Unit,
+    savedVideos: List<VideoItem> = emptyList(),
+    savedPosts: List<PostItem> = emptyList(),
+    onOpenSavedVideo: (String) -> Unit = {},
+    onOpenSavedPost: (String) -> Unit = {},
+    scrollToPostId: String? = null,
+    onPostScrollHandled: () -> Unit = {},
     onOpenLinkedVideo: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
     onPublishPost: (
@@ -101,6 +115,18 @@ fun PostsScreen(
     var showComposerSheet by remember { mutableStateOf(false) }
     var composerInitialVideoMode by remember { mutableStateOf(false) }
     var composerInitialImagePick by remember { mutableStateOf(false) }
+    var showSavedSheet by remember { mutableStateOf(false) }
+    var savedTab by remember { mutableStateOf(0) }
+    val postListState = rememberLazyListState()
+
+    LaunchedEffect(scrollToPostId) {
+        val targetId = scrollToPostId ?: return@LaunchedEffect
+        val index = posts.indexOfFirst { it.id == targetId }
+        if (index >= 0) {
+            postListState.animateScrollToItem(index + 1)
+        }
+        onPostScrollHandled()
+    }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -135,9 +161,48 @@ fun PostsScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold
             )
+            Spacer(modifier = Modifier.weight(1f))
+            val savedCount = savedVideos.size + savedPosts.size
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(50))
+                    .testTag("posts_saved_button")
+                    .clickable { showSavedSheet = true }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.Bookmark,
+                        contentDescription = "المحفوظات",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(21.dp)
+                    )
+                    if (savedCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = savedCount.toString(),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         LazyColumn(
+            state = postListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 110.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -171,6 +236,7 @@ fun PostsScreen(
                     authorAvatar = getAvatarPreset(post.authorAvatarId),
                     overlayAvatar = post.avatarOverlayId?.let(getAvatarPreset),
                     onToggleLike = { onToggleLikePost(post.id) },
+                    onToggleSave = { onToggleSavePost(post.id) },
                     onOpenComments = { onOpenComments(post.id) },
                     onShare = { onSharePost(post.id) },
                     onPlayLinkedVideo = { videoId -> onOpenLinkedVideo(videoId) },
@@ -191,6 +257,25 @@ fun PostsScreen(
                 onPublishPost(content, isVideo, videoTitle, uri, style)
                 showComposerSheet = false
             }
+        )
+    }
+
+    if (showSavedSheet) {
+        SavedItemsSheet(
+            savedVideos = savedVideos,
+            savedPosts = savedPosts,
+            selectedTab = savedTab,
+            onSelectTab = { savedTab = it },
+            onDismiss = { showSavedSheet = false },
+            onOpenVideo = { id ->
+                showSavedSheet = false
+                onOpenSavedVideo(id)
+            },
+            onOpenPost = { id ->
+                showSavedSheet = false
+                onOpenSavedPost(id)
+            },
+            getAvatarPreset = getAvatarPreset
         )
     }
 }
@@ -314,6 +399,7 @@ private fun PostCardItem(
     authorAvatar: AvatarPreset,
     overlayAvatar: AvatarPreset?,
     onToggleLike: () -> Unit,
+    onToggleSave: () -> Unit,
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
     onPlayLinkedVideo: (String) -> Unit,
@@ -496,6 +582,16 @@ private fun PostCardItem(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("post_share_${post.id}")
+                )
+                PostFooterButton(
+                    icon = if (post.isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    label = if (post.isSaved) "محفوظ" else "حفظ",
+                    tint = if (post.isSaved) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = onToggleSave,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("post_save_${post.id}")
                 )
             }
         }
@@ -733,6 +829,217 @@ private fun CreatePostBottomSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SavedItemsSheet(
+    savedVideos: List<VideoItem>,
+    savedPosts: List<PostItem>,
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onOpenVideo: (String) -> Unit,
+    onOpenPost: (String) -> Unit,
+    getAvatarPreset: (String) -> AvatarPreset
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val accent = LocalCustomButtonColors.current.actionButtonsColor
+        ?: MaterialTheme.colorScheme.primary
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "المحفوظات",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "${savedVideos.size} فيديو • ${savedPosts.size} منشور",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "إغلاق")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("الفيديوهات", "المنشورات").forEachIndexed { index, label ->
+                    val isSelected = selectedTab == index
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (isSelected) accent else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50))
+                            .testTag("saved_tab_${index}")
+                            .clickable { onSelectTab(index) }
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (selectedTab == 0) {
+                    if (savedVideos.isEmpty()) {
+                        item {
+                            Text(
+                                text = "لم تحفظ أي فيديو بعد. اضغط زر الحفظ على أي مقطع ليظهر هنا.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 28.dp)
+                            )
+                        }
+                    }
+                    items(savedVideos, key = { it.id }) { video ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onOpenVideo(video.id) }
+                                .testTag("saved_video_${video.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(96.dp, 64.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF0E131B))
+                                ) {
+                                    MediaSceneArtwork(
+                                        visualStyle = video.visualStyle,
+                                        mediaUriString = video.mediaUriString,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Box(
+                                        modifier = Modifier.align(Alignment.Center),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.6f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Filled.PlayArrow,
+                                                contentDescription = "تشغيل",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = video.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = video.creatorName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    if (savedPosts.isEmpty()) {
+                        item {
+                            Text(
+                                text = "لم تحفظ أي منشور بعد. اضغط «حفظ» تحت المنشور ليظهر هنا.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 28.dp)
+                            )
+                        }
+                    }
+                    items(savedPosts, key = { it.id }) { post ->
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onOpenPost(post.id) }
+                                .testTag("saved_post_${post.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                HighQualityAvatarView(
+                                    preset = getAvatarPreset(post.authorAvatarId),
+                                    size = 40.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = post.authorName,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = post.content,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 3,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

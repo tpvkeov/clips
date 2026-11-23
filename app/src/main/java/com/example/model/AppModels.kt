@@ -124,7 +124,8 @@ data class PostItem(
     val isLiked: Boolean = false,
     val sharesCount: Int,
     val comments: List<CommentItem> = emptyList(),
-    val isMine: Boolean = false
+    val isMine: Boolean = false,
+    val isSaved: Boolean = false
 )
 
 data class UserProfile(

@@ -3,10 +3,12 @@ package com.example.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ClipsLocalStore
 import com.example.data.DailyShareRewardState
 import com.example.data.DailyShareRewardStore
 import com.example.data.DemoDataFactory
 import com.example.data.DemoVideoCache
+import com.example.data.WatchProgress
 import com.example.model.AvatarPreset
 import com.example.model.ClipsLayoutMode
 import com.example.model.CommentItem
@@ -46,6 +48,12 @@ data class ShareFeedbackEvent(
     val isDailyCapReached: Boolean = false
 )
 
+/** Only shown when the user left reels accidentally and the progress is still fresh. */
+data class ContinueWatchingInfo(
+    val videoId: String,
+    val progress: Float
+)
+
 data class ClipsUiState(
     val currentTab: MainTab = MainTab.HOME,
     val isBottomBarVisible: Boolean = true,
@@ -73,7 +81,11 @@ data class ClipsUiState(
     val rewardedSharedContentIds: Set<String> = emptySet(),
     val rewardDayKey: String = "",
     val rewardedSharedVideoIds: Set<String> = emptySet(),
-    val rewardedSharedPostIds: Set<String> = emptySet()
+    val rewardedSharedPostIds: Set<String> = emptySet(),
+    val lastWatched: WatchProgress? = null,
+    val resumeCandidateId: String? = null,
+    val continueWatching: ContinueWatchingInfo? = null,
+    val clipsSessionToken: Int = 0
 ) {
     val activePlayerVideo: VideoItem?
         get() = activePlayerVideoId?.let { id ->
@@ -93,6 +105,9 @@ data class ClipsUiState(
 
     val savedItems: List<VideoItem>
         get() = (horizontalVideos + verticalClips).filter { it.isSaved }
+
+    val savedPosts: List<PostItem>
+        get() = posts.filter { it.isSaved }
 
     val myHorizontalVideos: List<VideoItem>
         get() = horizontalVideos.filter { it.isMine }
@@ -183,8 +198,12 @@ data class ClipsUiState(
 
 class ClipsViewModel(
     private val appContext: Context? = null,
-    private val dailyShareStore: DailyShareRewardStore? = null
+    private val dailyShareStore: DailyShareRewardStore? = null,
+    private val localStore: ClipsLocalStore? = null
 ) : ViewModel() {
+    companion object {
+        private const val RESUME_WINDOW_MS = 60L * 60L * 1000L
+    }
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
 
@@ -196,6 +215,40 @@ class ClipsViewModel(
                     rewardDayKey = saved.dayKey,
                     rewardedSharedVideoIds = saved.rewardedVideoIds,
                     rewardedSharedPostIds = saved.rewardedPostIds
+                )
+            }
+        }
+
+        localStore?.let { store ->
+            val savedVideoIds = store.loadSavedVideoIds()
+            val savedPostIds = store.loadSavedPostIds()
+            val latest = store.loadWatchProgress().values.maxByOrNull { it.watchedAt }
+            val exit = store.loadReelsExit()
+            val now = System.currentTimeMillis()
+            val freshExit = exit.isAccidental &&
+                exit.leftAt > 0L &&
+                now - exit.leftAt in 0L..RESUME_WINDOW_MS
+            val canResume = freshExit && latest != null &&
+                latest.progress in 0.02f..0.95f
+
+            if (!canResume) store.clearWatchProgress()
+
+            _uiState.update { state ->
+                state.copy(
+                    horizontalVideos = state.horizontalVideos.map {
+                        it.copy(isSaved = it.id in savedVideoIds)
+                    },
+                    verticalClips = state.verticalClips.map {
+                        it.copy(isSaved = it.id in savedVideoIds)
+                    },
+                    posts = state.posts.map {
+                        it.copy(isSaved = it.id in savedPostIds)
+                    },
+                    lastWatched = if (canResume) latest else null,
+                    resumeCandidateId = if (canResume) latest.videoId else null,
+                    continueWatching = if (canResume) {
+                        ContinueWatchingInfo(latest.videoId, latest.progress)
+                    } else null
                 )
             }
         }
@@ -228,9 +281,15 @@ class ClipsViewModel(
     }
 
     fun selectTab(tab: MainTab) {
-        _uiState.update {
-            it.copy(
+        if (_uiState.value.currentTab == MainTab.CLIPS && tab != MainTab.CLIPS) {
+            markReelsLeftDeliberately()
+        }
+        _uiState.update { state ->
+            state.copy(
                 currentTab = tab,
+                selectedClipId = if (tab == MainTab.CLIPS) {
+                    state.selectedClipId ?: state.resumeCandidateId
+                } else state.selectedClipId,
                 isBottomBarVisible = true
             )
         }
@@ -242,6 +301,9 @@ class ClipsViewModel(
                 currentTab = MainTab.CLIPS,
                 selectedClipId = clipId,
                 activeCreatorHandle = null,
+                resumeCandidateId = null,
+                continueWatching = null,
+                clipsSessionToken = it.clipsSessionToken + 1,
                 isBottomBarVisible = true
             )
         }
@@ -387,6 +449,9 @@ class ClipsViewModel(
                 selectedClipId = clipId,
                 clipsLayoutMode = mode,
                 activeCreatorHandle = null,
+                resumeCandidateId = null,
+                continueWatching = null,
+                clipsSessionToken = state.clipsSessionToken + 1,
                 isBottomBarVisible = true
             )
         }
@@ -394,6 +459,75 @@ class ClipsViewModel(
 
     fun clearSelectedClip() {
         _uiState.update { it.copy(selectedClipId = null) }
+    }
+
+    /** Open clips at the newest video, ignoring any stored resume position. */
+    fun playNewClips() {
+        localStore?.saveReelsExit(accidental = false)
+        _uiState.update { state ->
+            state.copy(
+                currentTab = MainTab.CLIPS,
+                selectedClipId = null,
+                resumeCandidateId = null,
+                continueWatching = null,
+                clipsSessionToken = state.clipsSessionToken + 1,
+                activeCreatorHandle = null,
+                isBottomBarVisible = true
+            )
+        }
+    }
+
+    /** Continue only from a still-fresh, accidental exit (never after a deliberate one). */
+    fun resumeWatching() {
+        val candidate = _uiState.value.resumeCandidateId ?: return
+        _uiState.update { state ->
+            state.copy(
+                currentTab = MainTab.CLIPS,
+                selectedClipId = candidate,
+                resumeCandidateId = candidate,
+                clipsSessionToken = state.clipsSessionToken + 1,
+                activeCreatorHandle = null,
+                isBottomBarVisible = true
+            )
+        }
+    }
+
+    fun recordWatchProgress(videoId: String, progress: Float) {
+        val entry = WatchProgress(videoId, progress.coerceIn(0f, 1f), System.currentTimeMillis())
+        localStore?.saveWatchProgress(videoId, entry.progress)
+        _uiState.update { state ->
+            val canShow = state.resumeCandidateId == videoId ||
+                (state.currentTab == MainTab.CLIPS && state.resumeCandidateId == null)
+            state.copy(
+                lastWatched = entry,
+                continueWatching = if (canShow) ContinueWatchingInfo(videoId, entry.progress) else state.continueWatching
+            )
+        }
+    }
+
+    /** App went to background while reels were visible: keep the resume point. */
+    fun markReelsBackgrounded() {
+        if (_uiState.value.currentTab != MainTab.CLIPS) return
+        localStore?.saveReelsExit(accidental = true)
+        _uiState.update { state ->
+            state.copy(
+                resumeCandidateId = state.lastWatched?.videoId,
+                continueWatching = state.lastWatched?.let {
+                    ContinueWatchingInfo(it.videoId, it.progress)
+                }
+            )
+        }
+    }
+
+    /** User pressed back or changed tab: do not offer to resume next time. */
+    fun markReelsLeftDeliberately() {
+        localStore?.saveReelsExit(accidental = false)
+        _uiState.update { state ->
+            state.copy(
+                resumeCandidateId = null,
+                continueWatching = null
+            )
+        }
     }
 
     fun onScrollDelta(@Suppress("UNUSED_PARAMETER") deltaY: Float) {
@@ -514,6 +648,9 @@ class ClipsViewModel(
                 } else clip
             }
             val nextEventId = (state.saveFeedbackEvent?.id ?: 0L) + 1L
+            localStore?.saveSavedVideoIds(
+                (updatedHorizontal + updatedVertical).filter { it.isSaved }.map { it.id }.toSet()
+            )
             state.copy(
                 horizontalVideos = updatedHorizontal,
                 verticalClips = updatedVertical,
@@ -521,6 +658,23 @@ class ClipsViewModel(
                     id = nextEventId,
                     isSaving = nowSaved
                 ),
+                feedbackMessage = null
+            )
+        }
+    }
+
+    fun toggleSavePost(postId: String) {
+        var nowSaved = false
+        _uiState.update { state ->
+            val updatedPosts = state.posts.map { post ->
+                if (post.id == postId) {
+                    nowSaved = !post.isSaved
+                    post.copy(isSaved = nowSaved)
+                } else post
+            }
+            localStore?.saveSavedPostIds(updatedPosts.filter { it.isSaved }.map { it.id }.toSet())
+            state.copy(
+                posts = updatedPosts,
                 feedbackMessage = null
             )
         }

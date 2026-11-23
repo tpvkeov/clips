@@ -109,4 +109,41 @@ class ExampleUnitTest {
     assertEquals(sixthClipId, viewModel.uiState.value.selectedClipId)
     assertEquals(ClipsLayoutMode.CINEMA_PLAYER, viewModel.uiState.value.clipsLayoutMode)
   }
+
+  @Test
+  fun testToggleSavePostUpdatesSavedList() {
+    val viewModel = ClipsViewModel()
+    val postId = viewModel.uiState.value.posts.first().id
+    assertTrue(viewModel.uiState.value.savedPosts.isEmpty())
+
+    viewModel.toggleSavePost(postId)
+    assertEquals(1, viewModel.uiState.value.savedPosts.size)
+    assertEquals(postId, viewModel.uiState.value.savedPosts.first().id)
+
+    viewModel.toggleSavePost(postId)
+    assertTrue(viewModel.uiState.value.savedPosts.isEmpty())
+  }
+
+  @Test
+  fun testResumeOnlyAfterAccidentalExit() {
+    val viewModel = ClipsViewModel()
+    val clipId = viewModel.uiState.value.verticalClips.first().id
+    viewModel.playNewClips()
+    viewModel.recordWatchProgress(clipId, 0.4f)
+    viewModel.markReelsBackgrounded()
+
+    assertEquals(clipId, viewModel.uiState.value.resumeCandidateId)
+    assertEquals(clipId, viewModel.uiState.value.continueWatching?.videoId)
+
+    // Deliberate navigation must clear the resume offer.
+    viewModel.markReelsLeftDeliberately()
+    assertNull(viewModel.uiState.value.resumeCandidateId)
+    assertNull(viewModel.uiState.value.continueWatching)
+
+    // "New videos" starts fresh and resets the pager session.
+    val session = viewModel.uiState.value.clipsSessionToken
+    viewModel.playNewClips()
+    assertNull(viewModel.uiState.value.selectedClipId)
+    assertEquals(session + 1, viewModel.uiState.value.clipsSessionToken)
+  }
 }

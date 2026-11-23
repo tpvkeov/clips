@@ -45,7 +45,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.viewmodel.ContinueWatchingInfo
 import com.example.model.AvatarPreset
 import com.example.model.UserProfile
 import com.example.model.UserStoryGroup
@@ -92,6 +95,10 @@ fun HomeScreen(
     stories: List<UserStoryGroup>,
     userProfile: UserProfile,
     searchQuery: String,
+    continueWatching: ContinueWatchingInfo? = null,
+    continueWatchingVideo: VideoItem? = null,
+    onResumeWatching: () -> Unit = {},
+    onPlayNewClips: () -> Unit = {},
     getAvatarPreset: (String) -> AvatarPreset,
     onSearchQueryChange: (String) -> Unit,
     onOpenVideo: (String) -> Unit,
@@ -265,6 +272,21 @@ fun HomeScreen(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
+                }
+            }
+
+            if (searchQuery.isBlank() && continueWatching != null && continueWatchingVideo != null) {
+                item(key = "continue_watching_card") {
+                    ContinueWatchingCard(
+                        video = continueWatchingVideo,
+                        progress = continueWatching.progress,
+                        onResume = onResumeWatching,
+                        onPlayNew = onPlayNewClips,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 760.dp)
+                            .padding(horizontal = 16.dp)
+                    )
                 }
             }
 
@@ -685,5 +707,99 @@ private fun VideoFeedDivider(isLight: Boolean) {
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
             modifier = Modifier.padding(horizontal = 16.dp)
         )
+    }
+}
+
+@Composable
+private fun ContinueWatchingCard(
+    video: VideoItem,
+    progress: Float,
+    onResume: () -> Unit,
+    onPlayNew: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = LocalCustomButtonColors.current.actionButtonsColor
+        ?: MaterialTheme.colorScheme.primary
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.36f)),
+        modifier = modifier.testTag("continue_watching_card")
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(58.dp, 72.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF0E131B))
+                ) {
+                    MediaSceneArtwork(
+                        visualStyle = video.visualStyle,
+                        mediaUriString = video.mediaUriString,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "متابعة المشاهدة",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accent,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = video.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = video.creatorName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                color = accent,
+                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(CircleShape)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onResume,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("continue_watching_resume"),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("متابعة")
+                }
+                OutlinedButton(
+                    onClick = onPlayNew,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("continue_watching_new")
+                ) {
+                    Text("فيديوهات جديدة")
+                }
+            }
+        }
     }
 }

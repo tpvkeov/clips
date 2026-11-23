@@ -24,7 +24,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,10 +37,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.ClipsLocalStore
 import com.example.data.DailyShareRewardStore
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
@@ -81,13 +87,29 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                 @Suppress("UNCHECKED_CAST")
                 return ClipsViewModel(
                     appContext = appContext,
-                    dailyShareStore = DailyShareRewardStore(appContext)
+                    dailyShareStore = DailyShareRewardStore(appContext),
+                    localStore = ClipsLocalStore(appContext)
                 ) as T
             }
         }
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Going to background while reels are visible counts as an accidental exit,
+    // so the saved position can be offered when the user comes back.
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                viewModel.markReelsBackgrounded()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    var pendingPostScrollId by remember { mutableStateOf<String?>(null) }
 
     // Silently check the public update manifest once per app start.
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
@@ -96,6 +118,11 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
         if (info != null && !UpdatePreferences(appContext).isDismissed(info.versionCode)) {
             updateInfo = info
         }
+    }
+
+    val continueWatchingVideo = state.continueWatching?.videoId?.let { id ->
+        state.verticalClips.find { it.id == id }
+            ?: state.horizontalVideos.find { it.id == id }
     }
 
     LaunchedEffect(state.feedbackMessage) {
@@ -148,6 +175,10 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             stories = state.stories,
                             userProfile = state.userProfile,
                             searchQuery = state.searchQuery,
+                            continueWatching = state.continueWatching,
+                            continueWatchingVideo = continueWatchingVideo,
+                            onResumeWatching = viewModel::resumeWatching,
+                            onPlayNewClips = viewModel::playNewClips,
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onSearchQueryChange = viewModel::updateSearchQuery,
                             onOpenVideo = viewModel::openVideoPlayer,
@@ -161,29 +192,38 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onScrollDelta = viewModel::onScrollDelta
                         )
 
-                        MainTab.CLIPS -> ClipsReelsScreen(
-                            clips = state.verticalClips,
-                            selectedClipId = state.selectedClipId,
-                            layoutMode = state.clipsLayoutMode,
-                            followedCreatorHandles = state.followedCreatorHandles,
-                            onClipConsumed = viewModel::clearSelectedClip,
-                            onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
-                            onSelectLayoutMode = viewModel::selectClipsLayoutMode,
-                            getAvatarPreset = viewModel::getAvatarPreset,
-                            onToggleLike = viewModel::toggleLikeVideo,
-                            onToggleSave = viewModel::toggleSaveVideo,
-                            onToggleFollow = viewModel::toggleFollowCreator,
-                            onOpenComments = { videoId ->
-                                viewModel.openComments(CommentsTarget.Video(videoId))
-                            },
-                            onShare = viewModel::shareVideo,
-                            onOpenCreatorProfile = viewModel::openCreatorProfile,
-                            onBottomBarVisibilityChange = viewModel::setBottomBarVisible,
-                            isBottomBarVisible = state.isBottomBarVisible
-                        )
+                        MainTab.CLIPS -> key(state.clipsSessionToken) {
+                            ClipsReelsScreen(
+                                clips = state.verticalClips,
+                                selectedClipId = state.selectedClipId,
+                                initialProgress = if (state.selectedClipId == state.resumeCandidateId) {
+                                    state.lastWatched?.progress ?: 0f
+                                } else 0f,
+                                layoutMode = state.clipsLayoutMode,
+                                followedCreatorHandles = state.followedCreatorHandles,
+                                onClipConsumed = viewModel::clearSelectedClip,
+                                onWatchProgress = viewModel::recordWatchProgress,
+                                onPlayNewClips = viewModel::playNewClips,
+                                onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
+                                onSelectLayoutMode = viewModel::selectClipsLayoutMode,
+                                getAvatarPreset = viewModel::getAvatarPreset,
+                                onToggleLike = viewModel::toggleLikeVideo,
+                                onToggleSave = viewModel::toggleSaveVideo,
+                                onToggleFollow = viewModel::toggleFollowCreator,
+                                onOpenComments = { videoId ->
+                                    viewModel.openComments(CommentsTarget.Video(videoId))
+                                },
+                                onShare = viewModel::shareVideo,
+                                onOpenCreatorProfile = viewModel::openCreatorProfile,
+                                onBottomBarVisibilityChange = viewModel::setBottomBarVisible,
+                                isBottomBarVisible = state.isBottomBarVisible
+                            )
+                        }
 
                         MainTab.UPLOAD -> UploadStudioScreen(
                             userProfile = state.userProfile,
+                            sharedVideosToday = state.rewardedSharedVideoIds.size,
+                            sharedPostsToday = state.rewardedSharedPostIds.size,
                             onPublish = viewModel::publishFromUpload,
                             onScrollDelta = viewModel::onScrollDelta
                         )
@@ -193,10 +233,17 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             userProfile = state.userProfile,
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onToggleLikePost = viewModel::toggleLikePost,
+                            onToggleSavePost = viewModel::toggleSavePost,
                             onOpenComments = { postId ->
                                 viewModel.openComments(CommentsTarget.Post(postId))
                             },
                             onSharePost = viewModel::sharePost,
+                            savedVideos = state.savedItems,
+                            savedPosts = state.savedPosts,
+                            onOpenSavedVideo = viewModel::openClipInReels,
+                            onOpenSavedPost = { postId -> pendingPostScrollId = postId },
+                            scrollToPostId = pendingPostScrollId,
+                            onPostScrollHandled = { pendingPostScrollId = null },
                             onOpenLinkedVideo = viewModel::openVideoPlayer,
                             onOpenCreatorProfile = viewModel::openCreatorProfile,
                             onPublishPost = viewModel::publishFromPostsTab,
