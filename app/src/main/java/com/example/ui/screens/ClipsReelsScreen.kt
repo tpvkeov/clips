@@ -113,7 +113,6 @@ fun ClipsReelsScreen(
     followedCreatorHandles: Set<String> = emptySet(),
     onClipConsumed: () -> Unit = {},
     onWatchProgress: (String, Float) -> Unit = { _, _ -> },
-    onPlayNewClips: () -> Unit = {},
     onToggleLayoutMode: () -> Unit = {},
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit = {},
     getAvatarPreset: (String) -> AvatarPreset,
@@ -235,27 +234,6 @@ fun ClipsReelsScreen(
                         ClipsBrandIcon(size = 38.dp)
                     }
 
-                    // One tap jumps straight to the newest clips instead of a saved position.
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color.Black.copy(alpha = 0.52f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(12.dp)
-                            .clip(RoundedCornerShape(50))
-                            .testTag("clips_play_new_button")
-                            .clickable(onClick = onPlayNewClips)
-                    ) {
-                        Text(
-                            text = "جديد ▶",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                        )
-                    }
                 }
 
         // Subtle floating mode pill when switching modes
@@ -527,7 +505,9 @@ private fun ReelPageItem(
             enter = fadeIn() + scaleIn(initialScale = 0.82f),
             exit = fadeOut() + scaleOut(targetScale = 0.92f),
             modifier = Modifier
-                .align(Alignment.Center)
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 62.dp)
                 .testTag("clips_speed_badge")
         ) {
             Surface(

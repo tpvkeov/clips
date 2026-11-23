@@ -203,7 +203,6 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                                 followedCreatorHandles = state.followedCreatorHandles,
                                 onClipConsumed = viewModel::clearSelectedClip,
                                 onWatchProgress = viewModel::recordWatchProgress,
-                                onPlayNewClips = viewModel::playNewClips,
                                 onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
                                 onSelectLayoutMode = viewModel::selectClipsLayoutMode,
                                 getAvatarPreset = viewModel::getAvatarPreset,
