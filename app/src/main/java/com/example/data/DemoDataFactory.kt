@@ -201,6 +201,24 @@ object DemoDataFactory {
 
     val categories: List<String> = listOf("الكل", "تقنية", "سفر", "ألعاب", "تصميم", "طبخ")
 
+    // Direct HTTPS MP4 samples verified from the browser (HTTP 200/206, video/mp4).
+    // Keeping them in one place means reels, home cards, posts and stories all use
+    // genuinely playable video instead of synthetic artwork.
+    private object DemoMediaUrls {
+        const val FLOWER = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+        const val SINTEL_1080P = "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4"
+        const val SINTEL_480P = "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4"
+        const val W3_SINTEL = "https://media.w3.org/2010/05/sintel/trailer.mp4"
+        const val W3_BUNNY = "https://media.w3.org/2010/05/bunny/trailer.mp4"
+        const val W3_BUNNY_MOVIE = "https://media.w3.org/2010/05/bunny/movie.mp4"
+        const val W3_MOVIE_300 = "https://media.w3.org/2010/05/video/movie_300.mp4"
+        const val BBB_1MB = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
+        const val BBB_2MB = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4"
+        const val JELLYFISH_1MB = "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4"
+        const val SINTEL_1MB = "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4"
+        const val SAMPLE_640 = "https://filesamples.com/samples/video/mp4/sample_640x360.mp4"
+    }
+
     val initialHorizontalVideos: List<VideoItem> = listOf(
         VideoItem(
             id = "h1",
@@ -218,9 +236,8 @@ object DemoDataFactory {
             category = "تقنية",
             timeAgo = "منذ ساعتين",
             visualStyle = MediaVisualStyle.STUDIO_PHOTO,
-            // One rare, genuinely deserving widescreen reels exception: original
-            // 1080p source, played fitted at full quality inside the reels feed.
-            mediaUriString = "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
+            // Original 1080p source for the home card and linked post preview.
+            mediaUriString = DemoMediaUrls.SINTEL_1080P,
             isMine = true,
             comments = listOf(
                 CommentItem("c1", "كريم عادل", "av_lens", "الإضاءة الجانبية أعطت عمق خرافي للمشهد!", "منذ ساعة"),
@@ -229,6 +246,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h2",
+            mediaUriString = DemoMediaUrls.W3_SINTEL,
             title = "رحلة ليلية في قلب المدينة المستقبلية — تصوير سينمائي بالعدسة العريضة",
             description = "لقطات ليلية ساحرة بين الأضواء والانعكاسات المطرية باستخدام عدسة 24mm.",
             creatorName = "نور الإبداع",
@@ -248,6 +266,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h3",
+            mediaUriString = DemoMediaUrls.FLOWER,
             title = "تحدي تصميم واجهات وتجربة مستخدم كاملة في أقل من ساعة",
             description = "نظرة تفصيلية على بناء الهوية البصرية واختيار الألوان التفاعلية لتطبيقات الجوال.",
             creatorName = "استوديو بيان",
@@ -267,6 +286,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h4",
+            mediaUriString = DemoMediaUrls.BBB_1MB,
             title = "مراجعة أقوى أجهزة الألعاب المحمولة وتجربة الأداء الفعلي على 120 إطار",
             description = "اختبار شامل للحرارة، البطارية، وجودة الشاشة مع أحدث الألعاب الثقيلة.",
             creatorName = "جيمر زون",
@@ -283,6 +303,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h5",
+            mediaUriString = DemoMediaUrls.SAMPLE_640,
             title = "كيف تسجّل بودكاست بصوت نقي وجودة إذاعية بأبسط الأدوات",
             description = "دليل عملي لاختيار الميكروفون وعزل الصوت ومعالجة النقاء الصوتي.",
             creatorName = "أحمد المنصور",
@@ -300,6 +321,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h6",
+            mediaUriString = DemoMediaUrls.W3_MOVIE_300,
             title = "أسرار تحضير القهوة المختصة والوصفات السريعة في المطبخ العصري",
             description = "خطوات بسيطة لنتيجة احترافية في كل صباح مع نصائح درجات الحرارة.",
             creatorName = "مذاق الشيف",
@@ -316,6 +338,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h7",
+            mediaUriString = DemoMediaUrls.W3_BUNNY,
             title = "أسرار الإخراج السينمائي للأفلام الوثائقية واستخدام العدسات المقربة",
             description = "كيف تحكي قصة بصرية مشوقة مع زوايا إبداعية واختيار موسيقى تصويرية مؤثرة.",
             creatorName = "نور الإبداع",
@@ -332,6 +355,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h8",
+            mediaUriString = DemoMediaUrls.JELLYFISH_1MB,
             title = "مغامرة في جبال الألب السويسرية — تصوير سينمائي 4K بطائرات الدرون",
             description = "مشاهد جوية خلابة للقمم الثلجية والبحيرات الزرقاء في قلب الطبيعة البكر.",
             creatorName = "رحالة الصحراء",
@@ -348,6 +372,7 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h9",
+            mediaUriString = DemoMediaUrls.SINTEL_480P,
             title = "بناء وتجهيز استوديو بودكاست احترافي بأقل تكلفة للمبتدئين",
             description = "تفاصيل الميكروفونات والكابلات وعوازل الصوت الصوتية لتسجيل محتوى بأعلى نقاء.",
             creatorName = "أحمد المنصور",
@@ -365,6 +390,9 @@ object DemoDataFactory {
         ),
         VideoItem(
             id = "h10",
+            // Highest-scoring widescreen clip: the single rare reels exception
+            // uses the original 1080p source, fitted in full inside the feed.
+            mediaUriString = DemoMediaUrls.SINTEL_1080P,
             title = "تحدي تجميع أقوى حاسوب مخصص للمونتاج والألعاب لعام 2026 مع بطاقة RTX 5090",
             description = "اختبار قوة المعالجة والتبريد المائي وسرعة الرندرة في برامج المونتاج السينمائي.",
             creatorName = "جيمر زون",
@@ -381,19 +409,20 @@ object DemoDataFactory {
         )
     )
 
-    // Direct, HTTPS, range-capable MP4 samples that are publicly playable on Android.
-    // Small files first so the first clips start quickly on mobile data.
+    // Verified browser-playable HTTPS MP4s. Small/range-capable files first so
+    // the first ten clips cache quickly on mobile data; samplelib was removed
+    // because it timed out during verification.
     val demoClipVideoUrls: List<String> = listOf(
-        "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-        "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
-        "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4",
-        "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4",
-        "https://filesamples.com/samples/video/mp4/sample_640x360.mp4",
-        "https://media.w3.org/2010/05/video/movie_300.mp4",
-        "https://samplelib.com/preview/mp4/sample-5s.mp4",
-        "https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4",
-        "https://media.w3.org/2010/05/sintel/trailer.mp4",
-        "https://media.w3.org/2010/05/bunny/trailer.mp4"
+        DemoMediaUrls.FLOWER,
+        DemoMediaUrls.BBB_1MB,
+        DemoMediaUrls.JELLYFISH_1MB,
+        DemoMediaUrls.SINTEL_1MB,
+        DemoMediaUrls.SAMPLE_640,
+        DemoMediaUrls.W3_MOVIE_300,
+        DemoMediaUrls.W3_BUNNY,
+        DemoMediaUrls.SINTEL_480P,
+        DemoMediaUrls.W3_SINTEL,
+        DemoMediaUrls.BBB_2MB
     )
 
     val initialVerticalClips: List<VideoItem> = listOf(
@@ -595,6 +624,7 @@ object DemoDataFactory {
             content = "نزلنا للتو فيديو أفقي جديد عن تجهيز استوديو التصوير الاحترافي وإعدادات الإضاءة السينمائية! شاركونا رأيكم في التعليقات 🎥✨",
             timeAgo = "منذ ساعتين",
             visualStyle = MediaVisualStyle.STUDIO_PHOTO,
+            mediaUriString = DemoMediaUrls.SINTEL_1080P,
             linkedVideoId = "h1",
             linkedVideoDuration = "14:28",
             likesCount = 1840,
@@ -637,6 +667,7 @@ object DemoDataFactory {
             content = "جربنا أقوى الأجهزة المحمولة على دقة عالية ومعدل إطارات ثابت — الفيديو العريض الكامل متاح الآن في الرئيسية وفي هذا المنشور 🎮🔥",
             timeAgo = "منذ يوم",
             visualStyle = MediaVisualStyle.GAMING_NEON,
+            mediaUriString = DemoMediaUrls.BBB_1MB,
             linkedVideoId = "h4",
             linkedVideoDuration = "16:40",
             likesCount = 2310,
@@ -653,12 +684,14 @@ object DemoDataFactory {
             slides = listOf(
                 StorySlide(
                     id = "sl_noor_1",
+                    mediaUriString = DemoMediaUrls.W3_BUNNY,
                     caption = "لقطة سريعة من كواليس التصوير الليلي بالعدسة الواسعة ✨🎥",
                     visualStyle = MediaVisualStyle.CYBER_CITY,
                     timeAgo = "منذ 25 دقيقة"
                 ),
                 StorySlide(
                     id = "sl_noor_2",
+                    mediaUriString = DemoMediaUrls.SINTEL_1080P,
                     caption = "اختبار تدرج الألوان السينمائي قبل نشر الحلقة الكاملة",
                     visualStyle = MediaVisualStyle.STUDIO_PHOTO,
                     timeAgo = "منذ 15 دقيقة"
@@ -673,6 +706,7 @@ object DemoDataFactory {
             slides = listOf(
                 StorySlide(
                     id = "sl_bayan_1",
+                    mediaUriString = DemoMediaUrls.FLOWER,
                     caption = "تصميم شاشة رئيسية متدرجة الألوان — ما رأيكم في التناسق؟ 🎨",
                     visualStyle = MediaVisualStyle.DESIGN_GRID,
                     timeAgo = "منذ ساعة"
@@ -687,12 +721,14 @@ object DemoDataFactory {
             slides = listOf(
                 StorySlide(
                     id = "sl_gamer_1",
+                    mediaUriString = DemoMediaUrls.BBB_1MB,
                     caption = "أداء ثابت على 120 إطار في تجربة اليوم 🔥🎮",
                     visualStyle = MediaVisualStyle.GAMING_NEON,
                     timeAgo = "منذ ساعتين"
                 ),
                 StorySlide(
                     id = "sl_gamer_2",
+                    mediaUriString = DemoMediaUrls.JELLYFISH_1MB,
                     caption = "تجهيز مكتب البث المباشر بإضاءة النيون الجديدة",
                     visualStyle = MediaVisualStyle.TECH_WAVE,
                     timeAgo = "منذ ساعة"
@@ -707,6 +743,7 @@ object DemoDataFactory {
             slides = listOf(
                 StorySlide(
                     id = "sl_chef_1",
+                    mediaUriString = DemoMediaUrls.SAMPLE_640,
                     caption = "فنجان إسبريسو بارد لبدء يوم مونتاج جديد ☕✨",
                     visualStyle = MediaVisualStyle.COOKING_WARM,
                     timeAgo = "منذ 3 ساعات"
@@ -722,6 +759,7 @@ object DemoDataFactory {
             slides = listOf(
                 StorySlide(
                     id = "sl_tariq_1",
+                    mediaUriString = DemoMediaUrls.W3_BUNNY_MOVIE,
                     caption = "غروب مذهل من القمة — المقطع الكامل قريباً في clips 🌅",
                     visualStyle = MediaVisualStyle.TRAVEL_SUNSET,
                     timeAgo = "منذ 5 ساعات"

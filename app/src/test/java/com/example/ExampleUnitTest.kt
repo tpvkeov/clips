@@ -157,8 +157,55 @@ class ExampleUnitTest {
     assertEquals(10, reels.count { it.orientation == VideoOrientation.VERTICAL })
     assertEquals(1, reels.count { it.orientation == VideoOrientation.HORIZONTAL })
     val exception = reels.first { it.orientation == VideoOrientation.HORIZONTAL }
-    assertEquals("h1", exception.id)
-    assertNotNull(exception.mediaUriString)
+    assertFalse(
+      "Wide reels exception must have a real media URL",
+      exception.mediaUriString.isNullOrBlank()
+    )
+    assertTrue(
+      "Wide reels exception must be a playable MP4",
+      exception.mediaUriString!!.endsWith(".mp4", ignoreCase = true)
+    )
+    assertTrue("Wide exception must earn its place", exception.viewsCount >= 100_000)
+    assertTrue("Wide exception must be well liked", exception.likesCount >= 5_000)
+  }
+
+  @Test
+  fun testAllDemoMediaUsesRealPlayableVideos() {
+    val horizontalUrls = DemoDataFactory.initialHorizontalVideos.mapNotNull { it.mediaUriString }
+    val verticalUrls = DemoDataFactory.initialVerticalClips.mapNotNull { it.mediaUriString }
+    val linkedPostUrls = DemoDataFactory.initialPosts
+      .filter { !it.linkedVideoId.isNullOrBlank() }
+      .mapNotNull { it.mediaUriString }
+    val storyUrls = DemoDataFactory.initialStories.flatMap { group ->
+      group.slides.mapNotNull { it.mediaUriString }
+    }
+    val allUrls = DemoDataFactory.demoClipVideoUrls + horizontalUrls + verticalUrls +
+      linkedPostUrls + storyUrls
+
+    assertEquals(10, DemoDataFactory.initialHorizontalVideos.size)
+    assertTrue(
+      "Every horizontal demo video should have a media URL",
+      DemoDataFactory.initialHorizontalVideos.all { !it.mediaUriString.isNullOrBlank() }
+    )
+    assertTrue(
+      "Every linked video post should have a playable preview",
+      DemoDataFactory.initialPosts
+        .filter { !it.linkedVideoId.isNullOrBlank() }
+        .all { !it.mediaUriString.isNullOrBlank() }
+    )
+    assertTrue(
+      "Every story slide should have a playable video",
+      DemoDataFactory.initialStories.all { group ->
+        group.slides.all { !it.mediaUriString.isNullOrBlank() }
+      }
+    )
+    allUrls.forEach { url ->
+      assertTrue(
+        "Demo media should be an HTTPS MP4: $url",
+        url.startsWith("https://", ignoreCase = true) &&
+          url.endsWith(".mp4", ignoreCase = true)
+      )
+    }
   }
 
   @Test
