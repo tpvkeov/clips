@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -31,6 +34,13 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Compute version
+        id: version
+        run: |
+          CODE=$((1000 + ${{ github.run_number }}))
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=1.0.$CODE" >> "$GITHUB_OUTPUT"
+
       - name: Prepare debug keystore
         run: |
           if [ -s debug.keystore.base64 ] && [ ! -s debug.keystore ]; then
@@ -49,6 +59,9 @@ jobs:
           fi
 
       - name: Build Debug APK
+        env:
+          BUILD_VERSION_CODE: ${{ steps.version.outputs.code }}
+          BUILD_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload app-debug.apk
@@ -57,3 +70,38 @@ jobs:
           name: clips-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # The app repository stays private. Only the APK + update.json are
+      # mirrored to a small public repo that the app can read anonymously.
+      - name: Publish APK + update.json to public updates repo
+        env:
+          UPDATES_TOKEN: ${{ secrets.UPDATES_TOKEN }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$UPDATES_TOKEN" ]; then
+            echo "::warning::UPDATES_TOKEN secret is not set; skipping public update publish"
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${UPDATES_TOKEN}@github.com/tpvkeov/clips-updates.git" updates-repo
+          cp app/build/outputs/apk/debug/app-debug.apk updates-repo/app-debug.apk
+          cat > updates-repo/update.json <<EOF
+          {
+            "versionCode": ${VERSION_CODE},
+            "versionName": "${VERSION_NAME}",
+            "apkUrl": "https://raw.githubusercontent.com/tpvkeov/clips-updates/main/app-debug.apk",
+            "notes": "تحديث جديد من GitHub Actions ($COMMIT_SHA)",
+            "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cd updates-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app-debug.apk update.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish update ${VERSION_NAME}"
+            git push
+          else
+            echo "No changes to publish"
+          fi

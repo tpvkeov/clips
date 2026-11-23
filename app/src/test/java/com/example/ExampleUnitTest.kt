@@ -93,15 +93,12 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun testClipsLayoutModeCyclesThroughAllThreeModes() {
+  fun testClipsLayoutModeCyclesBetweenTwoModes() {
     val viewModel = ClipsViewModel()
     assertEquals(ClipsLayoutMode.PRIMARY, viewModel.uiState.value.clipsLayoutMode)
 
     viewModel.toggleClipsLayoutMode()
     assertEquals(ClipsLayoutMode.CINEMA_PLAYER, viewModel.uiState.value.clipsLayoutMode)
-
-    viewModel.toggleClipsLayoutMode()
-    assertEquals(ClipsLayoutMode.CARDS_SHELF, viewModel.uiState.value.clipsLayoutMode)
 
     viewModel.toggleClipsLayoutMode()
     assertEquals(ClipsLayoutMode.PRIMARY, viewModel.uiState.value.clipsLayoutMode)

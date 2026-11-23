@@ -16,8 +16,10 @@ android {
     applicationId = "com.aistudio.clips.kxmzqv"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // GitHub Actions injects an incrementing number so every APK build can be
+    // detected as an update by the in-app updater. Local builds stay at 1.
+    versionCode = System.getenv("BUILD_VERSION_CODE")?.toIntOrNull() ?: 1
+    versionName = System.getenv("BUILD_VERSION_NAME") ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

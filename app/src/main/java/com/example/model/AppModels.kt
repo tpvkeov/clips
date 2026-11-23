@@ -17,8 +17,7 @@ enum class VideoOrientation {
 
 enum class ClipsLayoutMode(val labelAr: String) {
     PRIMARY("الوضع الأساسي"),
-    CINEMA_PLAYER("وضع المشغل الكامل"),
-    CARDS_SHELF("وضع بطاقات ريلز")
+    CINEMA_PLAYER("وضع المشغل الكامل")
 }
 
 enum class UploadContentType(val labelAr: String, val subtitleAr: String) {

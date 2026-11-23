@@ -590,6 +590,9 @@ fun MediaSceneArtwork(
                                                 activePlayer = mp
                                                 runCatching {
                                                     mp.setSurface(surf)
+                                                    // Always fit the whole frame (letterbox instead of
+                                                    // cropping a zoomed-in part) in every player.
+                                                    mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                                                     mp.setDataSource(ctx, Uri.parse(mediaUriString))
                                                     mp.isLooping = true
                                                     mp.setOnVideoSizeChangedListener { _, vw, vh ->

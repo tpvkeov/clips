@@ -7,6 +7,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -23,15 +24,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,31 +40,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -124,7 +113,6 @@ fun ClipsReelsScreen(
     onClipConsumed: () -> Unit = {},
     onToggleLayoutMode: () -> Unit = {},
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit = {},
-    onPlayClipFromShelf: (String) -> Unit = {},
     getAvatarPreset: (String) -> AvatarPreset,
     onToggleLike: (String) -> Unit,
     onToggleSave: (String) -> Unit,
@@ -133,6 +121,7 @@ fun ClipsReelsScreen(
     onShare: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
     onBottomBarVisibilityChange: (Boolean) -> Unit = {},
+    isBottomBarVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (clips.isEmpty()) {
@@ -176,10 +165,10 @@ fun ClipsReelsScreen(
         }
     }
 
-    LaunchedEffect(selectedClipId, clips, layoutMode) {
+    LaunchedEffect(selectedClipId, clips) {
         if (selectedClipId != null) {
             val targetIndex = clips.indexOfFirst { it.id == selectedClipId }
-            if (targetIndex >= 0 && layoutMode != ClipsLayoutMode.CARDS_SHELF) {
+            if (targetIndex >= 0) {
                 pagerState.scrollToPage(targetIndex)
             }
             onClipConsumed()
@@ -189,31 +178,9 @@ fun ClipsReelsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                if (layoutMode == ClipsLayoutMode.CARDS_SHELF) MaterialTheme.colorScheme.background
-                else Color.Black
-            )
+            .background(Color.Black)
     ) {
-        AnimatedContent(
-            targetState = layoutMode == ClipsLayoutMode.CARDS_SHELF,
-            transitionSpec = {
-                fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
-            },
-            label = "clips_root_mode"
-        ) { isCardsShelf ->
-            if (isCardsShelf) {
-                ClipsCardsShelfModeView(
-                    clips = clips,
-                    getAvatarPreset = getAvatarPreset,
-                    onToggleLayoutMode = onToggleLayoutMode,
-                    onSelectLayoutMode = onSelectLayoutMode,
-                    onPlayClip = onPlayClipFromShelf,
-                    onToggleSave = onToggleSave,
-                    onShare = onShare,
-                    onOpenCreatorProfile = onOpenCreatorProfile
-                )
-            } else {
-                Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
                     VerticalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -227,6 +194,7 @@ fun ClipsReelsScreen(
                             clip = clip,
                             isActive = isCurrentPage,
                             isCinemaMode = layoutMode == ClipsLayoutMode.CINEMA_PLAYER,
+                            isBottomBarVisible = isBottomBarVisible,
                             isFollowing = isFollowing,
                             creatorAvatar = getAvatarPreset(clip.creatorAvatarId),
                             overlayAvatar = clip.avatarOverlayId?.let(getAvatarPreset),
@@ -262,8 +230,6 @@ fun ClipsReelsScreen(
                         ClipsBrandIcon(size = 38.dp)
                     }
                 }
-            }
-        }
 
         // Subtle floating mode pill when switching modes
         AnimatedVisibility(
@@ -361,6 +327,7 @@ private fun ReelPageItem(
     clip: VideoItem,
     isActive: Boolean,
     isCinemaMode: Boolean,
+    isBottomBarVisible: Boolean,
     isFollowing: Boolean,
     creatorAvatar: AvatarPreset,
     overlayAvatar: AvatarPreset?,
@@ -433,6 +400,24 @@ private fun ReelPageItem(
         label = "like_bounce"
     )
 
+    // When the floating bottom bar hides, slide the overlay metadata down into
+    // the freed space instead of keeping it floating above the (now empty) bar.
+    val overlayBottomPadding by animateDpAsState(
+        targetValue = if (isBottomBarVisible) 70.dp else 12.dp,
+        animationSpec = tween(220),
+        label = "reel_overlay_bottom_padding"
+    )
+    val timelineBottomPadding by animateDpAsState(
+        targetValue = if (isBottomBarVisible) 63.dp else 6.dp,
+        animationSpec = tween(220),
+        label = "reel_timeline_bottom_padding"
+    )
+    val cinemaBottomPadding by animateDpAsState(
+        targetValue = if (isBottomBarVisible) 64.dp else 0.dp,
+        animationSpec = tween(220),
+        label = "reel_cinema_bottom_padding"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -455,7 +440,7 @@ private fun ReelPageItem(
             isPlaying = isPlaying && isActive,
             isMuted = isMuted,
             playbackSpeed = playbackSpeed,
-            fillScreen = true,
+            fillScreen = false,
             keepPrepared = isActive,
             modifier = Modifier.fillMaxSize()
         )
@@ -497,7 +482,7 @@ private fun ReelPageItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(bottom = 70.dp, start = 14.dp, end = 12.dp)
+                            .padding(bottom = overlayBottomPadding, start = 14.dp, end = 12.dp)
                     ) {
                         // Side action column lowered closer to the bottom edge
                         Column(
@@ -662,7 +647,7 @@ private fun ReelPageItem(
                         }
                     }
 
-                    // Playback timeline bar positioned cleanly right above the bottom navigation bar
+                    // Playback timeline bar: drops to the real bottom edge when the bar hides
                     LinearProgressIndicator(
                         progress = { progress },
                         color = actionAccent,
@@ -672,7 +657,7 @@ private fun ReelPageItem(
                             .height(3.dp)
                             .align(Alignment.BottomCenter)
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(bottom = 63.dp)
+                            .padding(bottom = timelineBottomPadding)
                     )
                 }
             } else {
@@ -718,13 +703,6 @@ private fun ReelPageItem(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("وضع بطاقات ريلز") },
-                                onClick = {
-                                    showMoreMenu = false
-                                    onSelectLayoutMode(ClipsLayoutMode.CARDS_SHELF)
-                                }
-                            )
-                            DropdownMenuItem(
                                 text = { Text("الوضع الأساسي") },
                                 onClick = {
                                     showMoreMenu = false
@@ -740,7 +718,7 @@ private fun ReelPageItem(
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(bottom = 64.dp)
+                            .padding(bottom = cinemaBottomPadding)
                     ) {
                         AnimatedVisibility(visible = !isCleanFocus) {
                             Column(
@@ -995,380 +973,6 @@ private fun ReelPageItem(
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-/**
- * MODE 2: REELS CARDS SHELF & GRID (matching Image 2: horizontal "ريلز" card carousel + vertical cards grid)
- */
-@Composable
-private fun ClipsCardsShelfModeView(
-    clips: List<VideoItem>,
-    getAvatarPreset: (String) -> AvatarPreset,
-    onToggleLayoutMode: () -> Unit,
-    onSelectLayoutMode: (ClipsLayoutMode) -> Unit,
-    onPlayClip: (String) -> Unit,
-    onToggleSave: (String) -> Unit,
-    onShare: (String) -> Unit,
-    onOpenCreatorProfile: (String) -> Unit
-) {
-    val carouselState = rememberLazyListState()
-    val snapFling = rememberSnapFlingBehavior(lazyListState = carouselState)
-    val scope = rememberCoroutineScope()
-    var showHeaderMenu by remember { mutableStateOf(false) }
-    val pairs = remember(clips) { clips.chunked(2) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-    ) {
-        // Top header matching the Reels shelf header with brand toggle image + "ريلز" + more menu
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(12.dp))
-                        .testTag("clips_layout_toggle_image")
-                        .clickable(onClick = onToggleLayoutMode),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ClipsBrandIcon(size = 36.dp)
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Icon(
-                    imageVector = Icons.Filled.Movie,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "ريلز",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-
-            Box {
-                IconButton(
-                    onClick = { showHeaderMenu = true },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreHoriz,
-                        contentDescription = "تبديل وضع العرض",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                DropdownMenu(
-                    expanded = showHeaderMenu,
-                    onDismissRequest = { showHeaderMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("الوضع الأساسي") },
-                        onClick = {
-                            showHeaderMenu = false
-                            onSelectLayoutMode(ClipsLayoutMode.PRIMARY)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("وضع المشغل الكامل") },
-                        onClick = {
-                            showHeaderMenu = false
-                            onSelectLayoutMode(ClipsLayoutMode.CINEMA_PLAYER)
-                        }
-                    )
-                }
-            }
-        }
-
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag("clips_cards_shelf_list"),
-            contentPadding = PaddingValues(
-                top = 4.dp,
-                bottom = 104.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Horizontal Reels Carousel Card Container (matching Image 2)
-            item(key = "reels_horizontal_cards_shelf") {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 2.dp,
-                    border = BorderStroke(
-                        0.75.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 14.dp)) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            LazyRow(
-                                state = carouselState,
-                                flingBehavior = snapFling,
-                                contentPadding = PaddingValues(horizontal = 14.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                items(clips, key = { "shelf_${it.id}" }) { clip ->
-                                    ReelShelfVerticalCard(
-                                        clip = clip,
-                                        creatorAvatar = getAvatarPreset(clip.creatorAvatarId),
-                                        onPlay = { onPlayClip(clip.id) },
-                                        onToggleSave = { onToggleSave(clip.id) },
-                                        onShare = { onShare(clip.id) },
-                                        onOpenCreator = { onOpenCreatorProfile(clip.creatorHandle) },
-                                        modifier = Modifier
-                                            .width(172.dp)
-                                            .height(294.dp)
-                                    )
-                                }
-                            }
-
-                            if (clips.size > 1) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                                    shadowElevation = 6.dp,
-                                    border = BorderStroke(
-                                        0.75.dp,
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
-                                    ),
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .padding(end = 8.dp)
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            val next = if (carouselState.canScrollForward) {
-                                                (carouselState.firstVisibleItemIndex + 1).coerceAtMost(clips.lastIndex)
-                                            } else 0
-                                            scope.launch { carouselState.animateScrollToItem(next) }
-                                        }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                            contentDescription = "التالي",
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Section label for full discovery grid
-            item(key = "reels_grid_header") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "استكشف المقاطع (${clips.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "اضغط للمشاهدة الكاملة",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            // 2-column grid of all vertical clips
-            items(pairs) { rowClips ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rowClips.forEach { clip ->
-                        ReelShelfVerticalCard(
-                            clip = clip,
-                            creatorAvatar = getAvatarPreset(clip.creatorAvatarId),
-                            onPlay = { onPlayClip(clip.id) },
-                            onToggleSave = { onToggleSave(clip.id) },
-                            onShare = { onShare(clip.id) },
-                            onOpenCreator = { onOpenCreatorProfile(clip.creatorHandle) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(9f / 15f)
-                        )
-                    }
-                    if (rowClips.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReelShelfVerticalCard(
-    clip: VideoItem,
-    creatorAvatar: AvatarPreset,
-    onPlay: () -> Unit,
-    onToggleSave: () -> Unit,
-    onShare: () -> Unit,
-    onOpenCreator: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var showCardMenu by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF0E1722))
-            .border(
-                width = 0.75.dp,
-                color = Color.White.copy(alpha = 0.14f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .testTag("shelf_reel_card_${clip.id}")
-            .clickable(onClick = onPlay)
-    ) {
-        MediaSceneArtwork(
-            visualStyle = clip.visualStyle,
-            mediaUriString = clip.mediaUriString,
-            fillScreen = true,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Top-End circular dark MoreVert icon (matching Image 2)
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.68f))
-                    .clickable { showCardMenu = true },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "خيارات المقطع",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            DropdownMenu(
-                expanded = showCardMenu,
-                onDismissRequest = { showCardMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("تشغيل ملء الشاشة") },
-                    onClick = {
-                        showCardMenu = false
-                        onPlay()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(if (clip.isSaved) "إزالة من المحفوظات" else "حفظ المقطع") },
-                    onClick = {
-                        showCardMenu = false
-                        onToggleSave()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("مشاركة") },
-                    onClick = {
-                        showCardMenu = false
-                        onShare()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("عرض قناة ${clip.creatorName}") },
-                    onClick = {
-                        showCardMenu = false
-                        onOpenCreator()
-                    }
-                )
-            }
-        }
-
-        // Bottom scrim with title, creator & views
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.62f),
-                            Color.Black.copy(alpha = 0.90f)
-                        )
-                    )
-                )
-                .padding(horizontal = 10.dp, vertical = 10.dp)
-        ) {
-            Column {
-                Text(
-                    text = clip.title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(5.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    HighQualityAvatarView(preset = creatorAvatar, size = 20.dp)
-                    Text(
-                        text = clip.creatorName,
-                        color = Color.White.copy(alpha = 0.88f),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Icon(
-                        imageVector = Icons.Filled.Visibility,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.78f),
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = formatCompactCount(clip.viewsCount),
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.labelSmall
-                    )
                 }
             }
         }

@@ -26,7 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,7 +40,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.DailyShareRewardStore
-import com.example.model.ClipsLayoutMode
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
 import com.example.ui.components.AddStoryBottomSheet
@@ -48,6 +49,10 @@ import com.example.ui.components.HorizontalVideoPlayerSheet
 import com.example.ui.components.SaveLiquidAnimationOverlay
 import com.example.ui.components.ShareFeedbackOverlay
 import com.example.ui.components.StoryViewerOverlay
+import com.example.ui.components.UpdateAvailableDialog
+import com.example.update.AppUpdateChecker
+import com.example.update.AppUpdateInfo
+import com.example.update.UpdatePreferences
 import com.example.ui.screens.ClipsReelsScreen
 import com.example.ui.screens.CreatorProfileScreen
 import com.example.ui.screens.HomeScreen
@@ -83,6 +88,15 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Silently check the public update manifest once per app start.
+    var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    LaunchedEffect(Unit) {
+        val info = AppUpdateChecker.check()
+        if (info != null && !UpdatePreferences(appContext).isDismissed(info.versionCode)) {
+            updateInfo = info
+        }
+    }
 
     LaunchedEffect(state.feedbackMessage) {
         val message = state.feedbackMessage
@@ -155,9 +169,6 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onClipConsumed = viewModel::clearSelectedClip,
                             onToggleLayoutMode = viewModel::toggleClipsLayoutMode,
                             onSelectLayoutMode = viewModel::selectClipsLayoutMode,
-                            onPlayClipFromShelf = { clipId ->
-                                viewModel.openClipInMode(clipId, ClipsLayoutMode.CINEMA_PLAYER)
-                            },
                             getAvatarPreset = viewModel::getAvatarPreset,
                             onToggleLike = viewModel::toggleLikeVideo,
                             onToggleSave = viewModel::toggleSaveVideo,
@@ -167,7 +178,8 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             },
                             onShare = viewModel::shareVideo,
                             onOpenCreatorProfile = viewModel::openCreatorProfile,
-                            onBottomBarVisibilityChange = viewModel::setBottomBarVisible
+                            onBottomBarVisibilityChange = viewModel::setBottomBarVisible,
+                            isBottomBarVisible = state.isBottomBarVisible
                         )
 
                         MainTab.UPLOAD -> UploadStudioScreen(
@@ -339,6 +351,16 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                     event = state.shareFeedbackEvent,
                     onDismiss = viewModel::clearShareFeedback
                 )
+
+                updateInfo?.let { info ->
+                    UpdateAvailableDialog(
+                        info = info,
+                        onDismiss = {
+                            UpdatePreferences(appContext).dismiss(info.versionCode)
+                            updateInfo = null
+                        }
+                    )
+                }
             }
             }
         }

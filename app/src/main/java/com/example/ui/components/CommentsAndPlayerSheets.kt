@@ -423,7 +423,8 @@ fun HorizontalVideoPlayerSheet(
 
     // Advanced player controls state
     var playbackSpeed by remember(video.id) { mutableFloatStateOf(1.0f) }
-    var selectedQuality by remember(video.id) { mutableStateOf("1080p HD") }
+    // Only the original source exists, so always play/display the original (highest) quality.
+    var selectedQuality by remember(video.id) { mutableStateOf("الأصلية") }
     var isMuted by remember(video.id) { mutableStateOf(false) }
     var isLoopEnabled by remember(video.id) { mutableStateOf(true) }
     var captionsEnabled by remember(video.id) { mutableStateOf(false) }
@@ -2298,8 +2299,9 @@ private fun PlayerAdvancedSettingsOverlay(
     onToggleRotation: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Single source = single honest option: the original file at maximum quality.
     val qualityOptions = remember {
-        listOf("تلقائي", "4K Ultra", "1080p HD", "720p", "480p", "360p")
+        listOf("الأصلية")
     }
     val speedOptions = remember {
         listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -2396,6 +2398,12 @@ private fun PlayerAdvancedSettingsOverlay(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "يُشغَّل الملف الأصلي بأعلى جودة متاحة دائماً",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall
+                )
 
                 Spacer(modifier = Modifier.height(14.dp))
 

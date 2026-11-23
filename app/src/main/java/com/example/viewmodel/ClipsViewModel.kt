@@ -365,10 +365,10 @@ class ClipsViewModel(
 
     fun toggleClipsLayoutMode() {
         _uiState.update { state ->
+            // Only the two full-screen reel modes remain; the cards-shelf mode was removed.
             val nextMode = when (state.clipsLayoutMode) {
                 ClipsLayoutMode.PRIMARY -> ClipsLayoutMode.CINEMA_PLAYER
-                ClipsLayoutMode.CINEMA_PLAYER -> ClipsLayoutMode.CARDS_SHELF
-                ClipsLayoutMode.CARDS_SHELF -> ClipsLayoutMode.PRIMARY
+                else -> ClipsLayoutMode.PRIMARY
             }
             state.copy(clipsLayoutMode = nextMode)
         }
