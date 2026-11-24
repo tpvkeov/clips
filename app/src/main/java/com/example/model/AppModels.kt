@@ -142,7 +142,6 @@ data class UserProfile(
     val followingCount: String,
     val totalLikesCount: String,
     val avatarPresetId: String,
-    val points: Int = 18,
     /** Local file URI of a real profile photo picked from the device. */
     val avatarImageUri: String? = null,
     val avatarImageZoom: Float = 1f,

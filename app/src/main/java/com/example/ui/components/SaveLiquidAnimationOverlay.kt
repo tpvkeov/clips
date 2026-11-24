@@ -697,10 +697,8 @@ fun SaveLiquidAnimationOverlay(
 }
 
 /**
- * Share feedback overlay shown when user shares a video or post:
- * Displays checkmark ("علامة صح") with:
- * "شكرا لمشاركه ومساعده النموي بكل جميل ونحن نقدر ذلك"
- * and "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
+ * Share feedback overlay: a checkmark confirming that the share link was
+ * copied. No points, rewards, or daily limits are shown.
  */
 @Composable
 fun ShareFeedbackOverlay(
@@ -816,9 +814,6 @@ fun ShareFeedbackOverlay(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            val isNewPoints = event?.isNewPointsAwarded ?: true
-                            val isDailyCapReached = event?.isDailyCapReached ?: false
-
                             Text(
                                 text = "شكرا لمشاركه ومساعده النموي بكل جميل ونحن نقدر ذلك ✨",
                                 color = Color.White,
@@ -846,11 +841,7 @@ fun ShareFeedbackOverlay(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        text = when {
-                                            isDailyCapReached -> "تم نسخ الرابط — اكتملت مكافآت اليوم، عد غداً ✨"
-                                            isNewPoints -> "تم نسخ الرابط بشكل جميل وتم اضافه نقطتين"
-                                            else -> "تم نسخ الرابط بنجاح وبشكل جميل"
-                                        },
+                                        text = "تم نسخ الرابط بنجاح وبشكل جميل",
                                         color = primaryAccent,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
@@ -859,18 +850,6 @@ fun ShareFeedbackOverlay(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = when {
-                                    isDailyCapReached -> "(الحد اليومي: 5 فيديوهات و5 منشورات) 🌙"
-                                    isNewPoints -> "(+2 نقاط مساهمة في رصيدك) 🚀"
-                                    else -> "(تم احتساب نقاط هذا المحتوى مسبقاً) ✨"
-                                },
-                                color = Color.White.copy(alpha = 0.65f),
-                                style = MaterialTheme.typography.labelSmall,
-                                textAlign = TextAlign.Center
-                            )
                         }
                     }
                 }

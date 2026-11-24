@@ -8,10 +8,8 @@ import com.example.data.AuthAttempt
 import com.example.data.AuthRepository
 import com.example.data.AuthSecurityStore
 import com.example.data.ClipsLocalStore
-import com.example.data.DailyShareRewardState
-import com.example.data.DailyShareRewardStore
-import com.example.data.DemoDataFactory
-import com.example.data.DemoVideoCache
+import com.example.data.AppCatalog
+import com.example.data.LocalVideoCache
 import com.example.data.DeviceIdentityCollector
 import com.example.data.ProfileAvatarState
 import com.example.data.ReelsFeedSelector
@@ -67,9 +65,7 @@ data class SaveFeedbackEvent(
 )
 
 data class ShareFeedbackEvent(
-    val id: Long,
-    val isNewPointsAwarded: Boolean = true,
-    val isDailyCapReached: Boolean = false
+    val id: Long
 )
 
 /** Only shown when the user left reels accidentally and the progress is still fresh. */
@@ -96,13 +92,21 @@ data class ClipsUiState(
     val isDarkMode: Boolean = true,
     val searchQuery: String = "",
     val selectedCategory: String = "الكل",
-    val horizontalVideos: List<VideoItem> = DemoDataFactory.initialHorizontalVideos,
-    val verticalClips: List<VideoItem> = DemoDataFactory.initialVerticalClips,
-    val posts: List<PostItem> = DemoDataFactory.initialPosts,
-    val stories: List<UserStoryGroup> = DemoDataFactory.initialStories,
+    val horizontalVideos: List<VideoItem> = emptyList(),
+    val verticalClips: List<VideoItem> = emptyList(),
+    val posts: List<PostItem> = emptyList(),
+    val stories: List<UserStoryGroup> = emptyList(),
     val activeStoryGroupIndex: Int? = null,
     val showAddStorySheet: Boolean = false,
-    val userProfile: UserProfile = DemoDataFactory.initialUserProfile,
+    val userProfile: UserProfile = UserProfile(
+        name = "",
+        handle = "",
+        bio = "",
+        followersCount = "0",
+        followingCount = "0",
+        totalLikesCount = "0",
+        avatarPresetId = AppCatalog.avatarPresets.first().id
+    ),
     val activePlayerVideoId: String? = null,
     val selectedClipId: String? = null,
     val activeCreatorHandle: String? = null,
@@ -116,10 +120,6 @@ data class ClipsUiState(
     val uploadSuccessEvent: Long = 0L,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
-    val rewardedSharedContentIds: Set<String> = emptySet(),
-    val rewardDayKey: String = "",
-    val rewardedSharedVideoIds: Set<String> = emptySet(),
-    val rewardedSharedPostIds: Set<String> = emptySet(),
     val lastWatched: WatchProgress? = null,
     val resumeCandidateId: String? = null,
     val continueWatching: ContinueWatchingInfo? = null,
@@ -128,7 +128,7 @@ data class ClipsUiState(
     val reportEntries: List<ReportEntry> = emptyList(),
     val submittedReportKeys: Set<String> = emptySet(),
     val showSuggestions: Boolean = false,
-    val suggestions: List<FeatureSuggestion> = DemoDataFactory.initialSuggestions,
+    val suggestions: List<FeatureSuggestion> = emptyList(),
     val activeSuggestionId: String? = null,
     val auth: AuthUiState = AuthUiState()
 ) {
@@ -193,53 +193,19 @@ data class ClipsUiState(
             ?: creatorPosts.firstOrNull()?.visualStyle
             ?: MediaVisualStyle.TECH_WAVE
 
-        val (bio, followers, following, likes) = when (handle) {
-            "@noor_visuals" -> listOf(
-                "مصورة ومخرجة لقطات سينمائية ومونتاج احترافي بالعدسات الواسعة والليلية.",
-                "218K",
-                "184",
-                "2.4M"
-            )
-            "@bayan_design" -> listOf(
-                "استوديو متخصص في تصميم واجهات المستخدم والهوية البصرية الحديثة لتطبيقات الجوال.",
-                "96K",
-                "140",
-                "890K"
-            )
-            "@gamer_zone" -> listOf(
-                "مراجعات تقنية وأجهزة ألعاب محمولة، تجارب أداء حقيقية ولقطات بطولات إلكترونية.",
-                "340K",
-                "95",
-                "4.1M"
-            )
-            "@chef_taste" -> listOf(
-                "عالم القهوة المختصة والوصفات السريعة بأسلوب بصري دافئ وإعداد منزلي احترافي.",
-                "124K",
-                "210",
-                "1.3M"
-            )
-            "@tariq_travel" -> listOf(
-                "رحال وموثّق طبيعة — لقطات جوية ومغامرات السفر حول العالم بجودة 4K.",
-                "178K",
-                "165",
-                "1.9M"
-            )
-            else -> listOf(
-                "صانع محتوى إبداعي على منصة clips — فيديوهات عريضة ومقاطع قصيرة يومية.",
-                "45K",
-                "120",
-                "310K"
-            )
-        }
+        // Real numbers only: profile stats come from Supabase, and the likes
+        // total is summed from the creator's actual videos in the feed.
+        val stats = SupabaseContentRepository.creatorStats(handle)
+        val realLikes = creatorVideos.sumOf { it.likesCount }
         return CreatorChannelInfo(
             handle = handle,
-            name = name,
-            bio = bio,
+            name = stats?.name?.takeIf { it.isNotBlank() } ?: name,
+            bio = stats?.bio.orEmpty(),
             avatarPresetId = avatarId,
             bannerStyle = banner,
-            followersCount = followers,
-            followingCount = following,
-            totalLikesCount = likes,
+            followersCount = stats?.followersCount ?: "0",
+            followingCount = stats?.followingCount ?: "0",
+            totalLikesCount = realLikes.toString(),
             useOwnBannerDrawable = false
         )
     }
@@ -247,7 +213,6 @@ data class ClipsUiState(
 
 class ClipsViewModel(
     private val appContext: Context? = null,
-    private val dailyShareStore: DailyShareRewardStore? = null,
     private val localStore: ClipsLocalStore? = null,
     private val authRepository: AuthRepository? = null,
     private val videoProcessor: VideoProcessingService? = null
@@ -285,23 +250,12 @@ class ClipsViewModel(
     }
 
     init {
-        dailyShareStore?.let { store ->
-            val saved = store.load()
-            _uiState.update {
-                it.copy(
-                    rewardDayKey = saved.dayKey,
-                    rewardedSharedVideoIds = saved.rewardedVideoIds,
-                    rewardedSharedPostIds = saved.rewardedPostIds
-                )
-            }
-        }
-
         localStore?.let { store ->
             val savedVideoIds = store.loadSavedVideoIds()
             savedVideoSources.putAll(store.loadSavedVideoSources())
             val savedPostIds = store.loadSavedPostIds()
             val savedLocalUri: (String) -> String? = { id ->
-                appContext?.let { DemoVideoCache.resolveSaved(it, id) }
+                appContext?.let { LocalVideoCache.resolveSaved(it, id) }
             }
             val verticalClipIds = _uiState.value.verticalClips
                 .filter { it.orientation == VideoOrientation.VERTICAL }
@@ -429,47 +383,18 @@ class ClipsViewModel(
             }
         }
 
-        // Download the first feed clips one by one and switch each clip to its
-        // local file the moment it finishes, so playback starts without waiting
-        // for the whole list. A failed download leaves the HTTPS URL as fallback.
-        appContext?.let { context ->
-            val clipIdsByUrl = DemoDataFactory.initialVerticalClips
-                .mapIndexed { index, clip -> DemoDataFactory.demoClipVideoUrls.getOrNull(index) to clip.id }
-                .groupBy({ it.first }, { it.second })
-                .mapValues { entry -> entry.value.toSet() }
-
-            viewModelScope.launch {
-                DemoVideoCache.prefetch(context, DemoDataFactory.demoClipVideoUrls) { url, localUri ->
-                    val ids = clipIdsByUrl[url].orEmpty()
-                    if (ids.isNotEmpty()) {
-                        _uiState.update { state ->
-                            state.copy(
-                                verticalClips = state.verticalClips.map { clip ->
-                                    if (clip.id in ids && clip.mediaUriString == url) {
-                                        clip.copy(mediaUriString = localUri)
-                                    } else clip
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Real backend feed. Demo data stays on screen until Supabase answers,
-        // so a cold start or an offline device still has something to play.
+        // Real backend feed: every video, post, profile and suggestion comes
+        // from Supabase. Only the user's own local, not-yet-synced media is
+        // preserved across reloads.
         if (SupabaseClient.isConfigured) {
             viewModelScope.launch {
-                val feed = SupabaseContentRepository.loadFeed().getOrNull() ?: return@launch
-                if (feed.horizontal.isEmpty() && feed.vertical.isEmpty()) return@launch
-
                 val savedIds = localStore?.loadSavedVideoIds().orEmpty()
                 val savedSources = localStore?.loadSavedVideoSources().orEmpty()
                 savedVideoSources.putAll(savedSources)
 
                 fun restoreLocalState(video: VideoItem): VideoItem {
                     if (video.id !in savedIds) return video
-                    val localUri = appContext?.let { DemoVideoCache.resolveSaved(it, video.id) }
+                    val localUri = appContext?.let { LocalVideoCache.resolveSaved(it, video.id) }
                         ?: savedSources[video.id]
                     return if (localUri.isNullOrBlank()) {
                         video.copy(isSaved = true)
@@ -478,17 +403,53 @@ class ClipsViewModel(
                     }
                 }
 
-                val horizontal = feed.horizontal.map(::restoreLocalState)
-                val vertical = feed.vertical.map(::restoreLocalState)
+                fun isLocalOnly(mediaUri: String?): Boolean = mediaUri?.let { uri ->
+                    uri.startsWith("file://", ignoreCase = true) ||
+                        uri.startsWith("content://", ignoreCase = true)
+                } == true
+
+                val feed = SupabaseContentRepository.loadFeed().getOrNull()
+                val remotePosts = SupabaseContentRepository.loadPosts().getOrNull()
+                val remoteSuggestions = SupabaseContentRepository.loadSuggestions().getOrNull()
+                val signedInUser = _uiState.value.auth.user
+                val myProfile = signedInUser?.uid?.takeIf { it.isNotBlank() }
+                    ?.let { uid -> SupabaseContentRepository.loadMyProfile(uid).getOrNull() }
+
                 _uiState.update { state ->
                     state.copy(
-                        horizontalVideos = horizontal.ifEmpty { state.horizontalVideos },
-                        verticalClips = vertical.ifEmpty { state.verticalClips }
+                        horizontalVideos = feed?.horizontal?.map(::restoreLocalState).orEmpty() +
+                            state.horizontalVideos.filter { it.isMine && isLocalOnly(it.mediaUriString) },
+                        verticalClips = feed?.vertical?.map(::restoreLocalState).orEmpty() +
+                            state.verticalClips.filter { it.isMine && isLocalOnly(it.mediaUriString) },
+                        posts = remotePosts.orEmpty() +
+                            state.posts.filter { it.isMine && isLocalOnly(it.mediaUriString) },
+                        suggestions = remoteSuggestions.orEmpty(),
+                        userProfile = myProfile?.let { profile ->
+                            state.userProfile.copy(
+                                name = profile.name,
+                                handle = profile.handle,
+                                bio = profile.bio,
+                                followersCount = profile.followersCount,
+                                followingCount = profile.followingCount,
+                                totalLikesCount = feed?.let { f ->
+                                    (f.horizontal + f.vertical)
+                                        .filter { it.creatorName.equals(profile.name, ignoreCase = true) }
+                                        .sumOf { it.likesCount }
+                                        .toString()
+                                } ?: profile.totalLikesCount
+                            )
+                        } ?: state.userProfile.copy(
+                            name = signedInUser?.displayName?.takeIf { it.isNotBlank() }
+                                ?: state.userProfile.name,
+                            handle = state.userProfile.handle.ifBlank {
+                                signedInUser?.email?.substringBefore('@')?.let { "@$it" } ?: ""
+                            }
+                        )
                     )
                 }
 
                 val context = appContext ?: return@launch
-                val firstClips = vertical.take(10)
+                val firstClips = feed?.vertical.orEmpty().take(10)
                 val remoteClipIdsByUrl = firstClips
                     .mapNotNull { clip -> clip.mediaUriString?.takeIf { it.isNotBlank() }?.to(clip.id) }
                     .groupBy({ it.first }, { it.second })
@@ -496,7 +457,7 @@ class ClipsViewModel(
                 val remoteUrls = remoteClipIdsByUrl.keys.toList()
                 if (remoteUrls.isEmpty()) return@launch
 
-                DemoVideoCache.prefetch(context, remoteUrls) { url, localUri ->
+                LocalVideoCache.prefetch(context, remoteUrls) { url, localUri ->
                     val ids = remoteClipIdsByUrl[url].orEmpty()
                     if (ids.isNotEmpty()) {
                         _uiState.update { state ->
@@ -521,7 +482,9 @@ class ClipsViewModel(
         offsetX: Float,
         offsetY: Float
     ): ClipsUiState {
-        val avatarId = if (imageUri.isNullOrBlank()) "av_creator" else DemoDataFactory.CUSTOM_AVATAR_ID
+        val avatarId = if (imageUri.isNullOrBlank()) {
+            AppCatalog.avatarPresets.first().id
+        } else AppCatalog.CUSTOM_AVATAR_ID
         val handle = userProfile.handle
         return copy(
             userProfile = userProfile.copy(
@@ -548,14 +511,14 @@ class ClipsViewModel(
 
     fun getAvatarPreset(id: String): AvatarPreset {
         val profile = _uiState.value.userProfile
-        if (id == DemoDataFactory.CUSTOM_AVATAR_ID) {
-            val base = DemoDataFactory.avatarPresets.first()
+        if (id == AppCatalog.CUSTOM_AVATAR_ID) {
+            val base = AppCatalog.avatarPresets.first()
             val uri = profile.avatarImageUri
             return if (uri.isNullOrBlank()) {
                 base
             } else {
                 base.copy(
-                    id = DemoDataFactory.CUSTOM_AVATAR_ID,
+                    id = AppCatalog.CUSTOM_AVATAR_ID,
                     nameAr = "صورة حسابي",
                     categoryAr = "صورة من الجهاز",
                     useCreatorPhoto = false,
@@ -566,8 +529,8 @@ class ClipsViewModel(
                 )
             }
         }
-        return DemoDataFactory.avatarPresets.find { it.id == id }
-            ?: DemoDataFactory.avatarPresets.first()
+        return AppCatalog.avatarPresets.find { it.id == id }
+            ?: AppCatalog.avatarPresets.first()
     }
 
     fun selectTab(tab: MainTab) {
@@ -994,7 +957,7 @@ class ClipsViewModel(
             val context = appContext
             if (context != null) {
                 viewModelScope.launch {
-                    withContext(Dispatchers.IO) { DemoVideoCache.removeSavedVideo(context, videoId) }
+                    withContext(Dispatchers.IO) { LocalVideoCache.removeSavedVideo(context, videoId) }
                 }
             }
             if (original != null) {
@@ -1018,12 +981,12 @@ class ClipsViewModel(
         val context = appContext ?: return
         viewModelScope.launch {
             val localUri = withContext(Dispatchers.IO) {
-                DemoVideoCache.saveVideo(context, videoId, source)
+                LocalVideoCache.saveVideo(context, videoId, source)
             }
             val stillSaved = _uiState.value.horizontalVideos.any { it.id == videoId && it.isSaved } ||
                 _uiState.value.verticalClips.any { it.id == videoId && it.isSaved }
             if (!stillSaved) {
-                withContext(Dispatchers.IO) { DemoVideoCache.removeSavedVideo(context, videoId) }
+                withContext(Dispatchers.IO) { LocalVideoCache.removeSavedVideo(context, videoId) }
                 return@launch
             }
             if (localUri == null) {
@@ -1062,55 +1025,18 @@ class ClipsViewModel(
         }
     }
 
-    private fun currentDayKey(): String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-
-    private fun refreshRewardDay(state: ClipsUiState): ClipsUiState {
-        val today = currentDayKey()
-        if (state.rewardDayKey == today) return state
-        val fresh = state.copy(
-            rewardDayKey = today,
-            rewardedSharedVideoIds = emptySet(),
-            rewardedSharedPostIds = emptySet()
-        )
-        dailyShareStore?.save(
-            DailyShareRewardState(today, emptySet(), emptySet())
-        )
-        return fresh
-    }
-
     fun shareVideo(videoId: String) {
-        _uiState.update { rawState ->
-            val state = refreshRewardDay(rawState)
-            val alreadyAwarded = videoId in state.rewardedSharedVideoIds
-            val capReached = state.rewardedSharedVideoIds.size >= 5
-            val award = !alreadyAwarded && !capReached
-            val rewardedIds = if (award) state.rewardedSharedVideoIds + videoId else state.rewardedSharedVideoIds
-
-            val next = state.copy(
-                userProfile = if (award) {
-                    state.userProfile.copy(points = state.userProfile.points + 2)
-                } else state.userProfile,
-                rewardedSharedContentIds = if (award) state.rewardedSharedContentIds + videoId
-                                           else state.rewardedSharedContentIds,
-                rewardedSharedVideoIds = rewardedIds,
+        _uiState.update { state ->
+            state.copy(
                 horizontalVideos = state.horizontalVideos.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
                 verticalClips = state.verticalClips.map {
                     if (it.id == videoId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                shareFeedbackEvent = ShareFeedbackEvent(
-                    id = System.currentTimeMillis(),
-                    isNewPointsAwarded = award,
-                    isDailyCapReached = capReached && !alreadyAwarded
-                ),
+                shareFeedbackEvent = ShareFeedbackEvent(id = System.currentTimeMillis()),
                 feedbackMessage = null
             )
-            dailyShareStore?.save(
-                DailyShareRewardState(next.rewardDayKey, next.rewardedSharedVideoIds, next.rewardedSharedPostIds)
-            )
-            next
         }
     }
 
@@ -1132,34 +1058,14 @@ class ClipsViewModel(
     }
 
     fun sharePost(postId: String) {
-        _uiState.update { rawState ->
-            val state = refreshRewardDay(rawState)
-            val alreadyAwarded = postId in state.rewardedSharedPostIds
-            val capReached = state.rewardedSharedPostIds.size >= 5
-            val award = !alreadyAwarded && !capReached
-            val rewardedIds = if (award) state.rewardedSharedPostIds + postId else state.rewardedSharedPostIds
-
-            val next = state.copy(
-                userProfile = if (award) {
-                    state.userProfile.copy(points = state.userProfile.points + 2)
-                } else state.userProfile,
-                rewardedSharedContentIds = if (award) state.rewardedSharedContentIds + postId
-                                           else state.rewardedSharedContentIds,
-                rewardedSharedPostIds = rewardedIds,
+        _uiState.update { state ->
+            state.copy(
                 posts = state.posts.map {
                     if (it.id == postId) it.copy(sharesCount = it.sharesCount + 1) else it
                 },
-                shareFeedbackEvent = ShareFeedbackEvent(
-                    id = System.currentTimeMillis(),
-                    isNewPointsAwarded = award,
-                    isDailyCapReached = capReached && !alreadyAwarded
-                ),
+                shareFeedbackEvent = ShareFeedbackEvent(id = System.currentTimeMillis()),
                 feedbackMessage = null
             )
-            dailyShareStore?.save(
-                DailyShareRewardState(next.rewardDayKey, next.rewardedSharedVideoIds, next.rewardedSharedPostIds)
-            )
-            next
         }
     }
 

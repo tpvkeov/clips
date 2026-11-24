@@ -30,7 +30,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
@@ -38,17 +37,13 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,7 +65,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.MediaVisualStyle
 import com.example.model.UploadContentType
-import com.example.model.UserProfile
 import com.example.ui.camera.ProCameraStudioDialog
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.MediaSceneArtwork
@@ -78,9 +72,6 @@ import com.example.ui.theme.LocalCustomButtonColors
 
 @Composable
 fun UploadStudioScreen(
-    userProfile: UserProfile,
-    sharedVideosToday: Int = 0,
-    sharedPostsToday: Int = 0,
     onPublish: (
         contentType: UploadContentType,
         title: String,
@@ -104,7 +95,6 @@ fun UploadStudioScreen(
     var description by remember { mutableStateOf("") }
     var capturedOrPickedUri by remember { mutableStateOf<String?>(null) }
     var showCameraDialog by remember { mutableStateOf(false) }
-    var showRewardsSheet by remember { mutableStateOf(false) }
 
     val mediaPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -156,71 +146,6 @@ fun UploadStudioScreen(
                 )
             }
         }
-
-        // Isolated Points Badge Card on Upload Studio screen
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = primaryAccent.copy(alpha = 0.14f),
-            border = BorderStroke(1.dp, primaryAccent.copy(alpha = 0.40f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .clickable { showRewardsSheet = true }
-                .testTag("upload_studio_points_badge")
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(primaryAccent),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "رصيد نقاط التفاعل",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${userProfile.points} نقطة مساهمة",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = primaryAccent
-                        )
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = secondaryAccent.copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = "+2 لكل مشاركة 🚀",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = secondaryAccent,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
 
         // Focused Media Picker + Pro Camera Button Area
         Surface(
@@ -464,152 +389,6 @@ fun UploadStudioScreen(
         )
     }
 
-    if (showRewardsSheet) {
-        RewardsDetailsSheet(
-            points = userProfile.points,
-            sharedVideosToday = sharedVideosToday,
-            sharedPostsToday = sharedPostsToday,
-            onDismiss = { showRewardsSheet = false }
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun RewardsDetailsSheet(
-    points: Int,
-    sharedVideosToday: Int,
-    sharedPostsToday: Int,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val accent = LocalCustomButtonColors.current.actionButtonsColor
-        ?: MaterialTheme.colorScheme.primary
-    val secondaryAccent = MaterialTheme.colorScheme.secondary
-    val videoProgress = (sharedVideosToday.coerceAtMost(5) / 5f)
-    val postProgress = (sharedPostsToday.coerceAtMost(5) / 5f)
-    val earnedToday = (sharedVideosToday.coerceAtMost(5) + sharedPostsToday.coerceAtMost(5)) * 2
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 26.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "مهام ونقاط اليوم",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        text = "رصيدك الحالي: $points نقطة مساهمة",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "إغلاق")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "أنجزت اليوم +$earnedToday نقطة",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = accent
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-
-            RewardTaskRow(
-                title = "مشاركة فيديوهات",
-                subtitle = "حتى 5 فيديوهات يومياً • +2 نقطة لكل مشاركة",
-                done = sharedVideosToday.coerceAtMost(5),
-                total = 5,
-                progress = videoProgress,
-                accent = accent
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            RewardTaskRow(
-                title = "مشاركة منشورات",
-                subtitle = "حتى 5 منشورات يومياً • +2 نقطة لكل مشاركة",
-                done = sharedPostsToday.coerceAtMost(5),
-                total = 5,
-                progress = postProgress,
-                accent = secondaryAccent
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-            Text(
-                text = "تتجدد المهام تلقائياً في بداية اليوم الجديد.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun RewardTaskRow(
-    title: String,
-    subtitle: String,
-    done: Int,
-    total: Int,
-    progress: Float,
-    accent: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "$done/$total",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = accent
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                color = accent,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(50))
-            )
-        }
-    }
 }
 
 private fun detectMediaContentType(context: Context, uri: Uri): UploadContentType {

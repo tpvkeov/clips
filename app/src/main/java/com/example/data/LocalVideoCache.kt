@@ -20,7 +20,7 @@ import java.security.MessageDigest
  * MediaPlayer / MediaMetadataRetriever accept file:// URIs, so no player code
  * needs to know where the bytes came from.
  */
-object DemoVideoCache {
+object LocalVideoCache {
     private const val CACHE_DIR = "demo_clips"
     private const val SAVED_DIR = "saved_clips"
     private const val MAX_FILE_BYTES = 25L * 1024 * 1024

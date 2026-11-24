@@ -51,7 +51,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.AuthRepository
 import com.example.data.AuthSecurityStore
 import com.example.data.ClipsLocalStore
-import com.example.data.DailyShareRewardStore
 import com.example.data.VideoProcessingService
 import com.example.model.CommentsTarget
 import com.example.model.MainTab
@@ -103,7 +102,6 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                 @Suppress("UNCHECKED_CAST")
                 return ClipsViewModel(
                     appContext = appContext,
-                    dailyShareStore = DailyShareRewardStore(appContext),
                     localStore = ClipsLocalStore(appContext),
                     authRepository = AuthRepository(
                         context = appContext,
@@ -287,9 +285,6 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                         }
 
                         MainTab.UPLOAD -> UploadStudioScreen(
-                            userProfile = state.userProfile,
-                            sharedVideosToday = state.rewardedSharedVideoIds.size,
-                            sharedPostsToday = state.rewardedSharedPostIds.size,
                             onPublish = viewModel::publishFromUpload,
                             onScrollDelta = viewModel::onScrollDelta
                         )
