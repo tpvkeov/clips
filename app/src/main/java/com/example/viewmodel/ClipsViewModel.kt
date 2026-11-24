@@ -311,6 +311,11 @@ class ClipsViewModel(
             }
 
             val savedReports = store.loadReports()
+            store.loadLoginAccentArgb()?.let { savedAccentArgb ->
+                _uiState.update { state ->
+                    state.copy(auth = state.auth.copy(selectedAccentArgb = savedAccentArgb))
+                }
+            }
             store.loadSuggestions()?.let { savedSuggestions ->
                 _uiState.update { it.copy(suggestions = savedSuggestions) }
             }
@@ -333,7 +338,16 @@ class ClipsViewModel(
             val session = runCatching { repository.loadSession() }.getOrNull()
             val lockedUntil = securityStore?.lockUntilMillis() ?: 0L
             _uiState.update { state ->
+                // A restored signed-in session also restores the login accent;
+                // guests keep the default theme until they sign in.
+                val restoredAccent = if (session != null) {
+                    state.auth.selectedAccentArgb?.let { AppThemeAccent.fromArgb(it) }
+                } else {
+                    null
+                }
                 state.copy(
+                    themeAccent = restoredAccent ?: state.themeAccent,
+                    buttonColors = if (restoredAccent != null) CustomButtonColors() else state.buttonColors,
                     auth = state.auth.copy(
                         isLoggedIn = session != null,
                         isGuest = session == null,
@@ -1386,6 +1400,14 @@ class ClipsViewModel(
         _uiState.update { it.copy(auth = it.auth.copy(password = value)) }
     }
 
+    /** Persist the chosen sign-in swatch so it survives leaving the auth page or restarting. */
+    fun selectAuthAccent(argb: Int) {
+        localStore?.saveLoginAccentArgb(argb)
+        _uiState.update { state ->
+            state.copy(auth = state.auth.copy(selectedAccentArgb = argb))
+        }
+    }
+
     /** Likes, follows and comments need login; reports and suggestions stay open to guests. */
     private fun requireEngagementAuth(action: PendingEngagement): Boolean {
         if (isSignedIn()) return true
@@ -1427,8 +1449,15 @@ class ClipsViewModel(
 
         if (attempt.user != null) {
             val user = attempt.user
+            val accent = _uiState.value.auth.selectedAccentArgb
+                ?.let { AppThemeAccent.fromArgb(it) }
+                ?: _uiState.value.themeAccent
             _uiState.update { state ->
                 state.copy(
+                    // Clearing overrides lets the chosen sign-in color drive
+                    // the theme and every button across the whole app.
+                    themeAccent = accent,
+                    buttonColors = CustomButtonColors(),
                     userProfile = state.userProfile.copy(
                         name = user.displayName.ifBlank { state.userProfile.name }
                     ),

@@ -345,5 +345,7 @@ data class AuthUiState(
     val device: DeviceIdentity? = null,
     val isDeviceBanned: Boolean = false,
     val googleConfigured: Boolean = false,
-    val pendingAction: AuthPendingAction? = null
+    val pendingAction: AuthPendingAction? = null,
+    /** ARGB swatch selected on the sign-in page; applied app-wide after login. */
+    val selectedAccentArgb: Int? = null
 )

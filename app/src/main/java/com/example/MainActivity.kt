@@ -494,7 +494,8 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                         onPasswordChange = viewModel::updateAuthPassword,
                         onSubmitEmail = viewModel::submitEmailAuth,
                         onSubmitGoogle = { viewModel.submitGoogleAuth(activityContext) },
-                        onContinueAsGuest = viewModel::closeAuthScreen
+                        onContinueAsGuest = viewModel::closeAuthScreen,
+                        onSelectAccent = viewModel::selectAuthAccent
                     )
                 }
 

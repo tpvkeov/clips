@@ -14,11 +14,45 @@ import com.example.update.UpdateCheckResult
 import com.example.model.ClipsLayoutMode
 import com.example.model.MainTab
 import com.example.model.VideoOrientation
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import com.example.ui.theme.AppThemeAccent
 
 class ExampleUnitTest {
   @Test
   fun addition_isCorrect() {
     assertEquals(4, 2 + 2)
+  }
+
+  @Test
+  fun testLoginAccentSelectionIsExposedInAuthState() {
+    val viewModel = ClipsViewModel()
+    val argb = Color(0xFF3B82F6).toArgb()
+
+    viewModel.selectAuthAccent(argb)
+
+    assertEquals(argb, viewModel.uiState.value.auth.selectedAccentArgb)
+  }
+
+  @Test
+  fun testLoginSwatchesMapToFullAppThemes() {
+    assertEquals(
+      AppThemeAccent.EMERALD_GREEN,
+      AppThemeAccent.fromArgb(Color(0xFF10B981).toArgb())
+    )
+    assertEquals(
+      AppThemeAccent.ROYAL_BLUE,
+      AppThemeAccent.fromArgb(Color(0xFF3B82F6).toArgb())
+    )
+    assertEquals(
+      AppThemeAccent.CRIMSON,
+      AppThemeAccent.fromArgb(Color(0xFFFF3B5C).toArgb())
+    )
+    // The yellow swatch is the default theme's tertiary color.
+    assertEquals(
+      AppThemeAccent.ORANGE_GREEN,
+      AppThemeAccent.fromArgb(Color(0xFFFFB300).toArgb())
+    )
   }
 
   @Test
@@ -191,13 +225,19 @@ class ExampleUnitTest {
       "Every horizontal demo video should have a media URL",
       DemoDataFactory.initialHorizontalVideos.all { !it.mediaUriString.isNullOrBlank() }
     )
+    val shortPortraitClips = setOf(
+      "https://samplelib.com/vertical/sample-vertical-5s.mp4",
+      "https://samplelib.com/vertical/sample-vertical-10s.mp4"
+    )
+    assertEquals(10, DemoDataFactory.demoClipVideoUrls.size)
     assertTrue(
-      "Clips media must be portrait videos",
-      DemoDataFactory.demoClipVideoUrls.all { it.contains("/vertical/") }
+      "Clips media must reuse only short 5s/10s portrait videos",
+      DemoDataFactory.demoClipVideoUrls.all { it in shortPortraitClips } &&
+        DemoDataFactory.demoClipVideoUrls.containsAll(shortPortraitClips)
     )
     assertTrue(
       "Every vertical clip must use portrait media",
-      verticalUrls.all { it.contains("/vertical/") }
+      verticalUrls.all { it in shortPortraitClips }
     )
     assertTrue(
       "Every linked video post should have a playable preview",

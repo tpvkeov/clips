@@ -235,6 +235,22 @@ class ClipsLocalStore(context: Context) {
         preferences.edit().putString(KEY_SUGGESTIONS, array.toString()).apply()
     }
 
+    // ---------------------------------------------------------------------
+    // Sign-in accent: remembered even if the user leaves the auth page
+    // without signing in, then applied to the whole app on success.
+    // ---------------------------------------------------------------------
+
+    fun loadLoginAccentArgb(): Int? =
+        if (preferences.contains(KEY_LOGIN_ACCENT_ARGB)) {
+            preferences.getInt(KEY_LOGIN_ACCENT_ARGB, 0)
+        } else {
+            null
+        }
+
+    fun saveLoginAccentArgb(argb: Int) {
+        preferences.edit().putInt(KEY_LOGIN_ACCENT_ARGB, argb).apply()
+    }
+
     private companion object {
         const val KEY_SAVED_VIDEOS = "saved_video_ids"
         const val KEY_SAVED_POSTS = "saved_post_ids"
@@ -247,5 +263,6 @@ class ClipsLocalStore(context: Context) {
         const val KEY_PROFILE_AVATAR_OFFSET_Y = "profile_avatar_offset_y"
         const val KEY_REPORTS = "reports"
         const val KEY_SUGGESTIONS = "feature_suggestions"
+        const val KEY_LOGIN_ACCENT_ARGB = "login_accent_argb"
     }
 }

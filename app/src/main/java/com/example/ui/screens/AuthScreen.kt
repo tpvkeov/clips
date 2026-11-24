@@ -69,6 +69,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -93,6 +94,7 @@ fun AuthScreen(
     onSubmitEmail: () -> Unit,
     onSubmitGoogle: () -> Unit,
     onContinueAsGuest: () -> Unit,
+    onSelectAccent: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     BackHandler(enabled = true) { onBack() }
@@ -106,7 +108,9 @@ fun AuthScreen(
     val colorChoices = remember(baseAccent, secondary, tertiary) {
         listOf(baseAccent, secondary, tertiary, Color(0xFFFF3B5C))
     }
-    var selectedColorIndex by remember { mutableStateOf(0) }
+    val selectedColorIndex = state.selectedAccentArgb?.let { saved ->
+        colorChoices.indexOfFirst { it.toArgb() == saved }.takeIf { it >= 0 }
+    } ?: 0
     val accent = colorChoices[selectedColorIndex]
     val isRegister = state.mode == AuthMode.REGISTER
     val locked = state.remainingLockSeconds > 0 || state.lockUntilMillis > System.currentTimeMillis()
@@ -205,7 +209,7 @@ fun AuthScreen(
                                 color = if (selected) MaterialTheme.colorScheme.onBackground else Color.White.copy(alpha = 0.65f),
                                 shape = CircleShape
                             )
-                            .clickable { selectedColorIndex = index }
+                            .clickable { onSelectAccent(color.toArgb()) }
                     )
                 }
             }

@@ -224,10 +224,6 @@ object DemoDataFactory {
         const val SAMPLE_640 = "https://filesamples.com/samples/video/mp4/sample_640x360.mp4"
         const val VERTICAL_5S = "https://samplelib.com/vertical/sample-vertical-5s.mp4"
         const val VERTICAL_10S = "https://samplelib.com/vertical/sample-vertical-10s.mp4"
-        const val VERTICAL_15S = "https://samplelib.com/vertical/sample-vertical-15s.mp4"
-        const val VERTICAL_20S = "https://samplelib.com/vertical/sample-vertical-20s.mp4"
-        const val VERTICAL_30S = "https://samplelib.com/vertical/sample-vertical-30s.mp4"
-        const val VERTICAL_15S_4X5 = "https://samplelib.com/vertical/sample-vertical-15s-4x5.mp4"
     }
 
     val initialHorizontalVideos: List<VideoItem> = listOf(
@@ -420,19 +416,20 @@ object DemoDataFactory {
         )
     )
 
-    // All Clips media is genuinely portrait (9:16 or 4:5). Landscape MP4s are
-    // used only by the Home feed and Posts player, never by the reels feed.
+    // All Clips media is genuinely portrait 9:16 and limited to two short,
+    // cached files so the reels feed stays light on mobile data and disk space.
+    // Landscape MP4s are used only by the Home feed and Posts player.
     val demoClipVideoUrls: List<String> = listOf(
         DemoMediaUrls.VERTICAL_5S,
         DemoMediaUrls.VERTICAL_10S,
-        DemoMediaUrls.VERTICAL_15S,
-        DemoMediaUrls.VERTICAL_20S,
-        DemoMediaUrls.VERTICAL_30S,
-        DemoMediaUrls.VERTICAL_15S_4X5,
         DemoMediaUrls.VERTICAL_5S,
         DemoMediaUrls.VERTICAL_10S,
-        DemoMediaUrls.VERTICAL_15S,
-        DemoMediaUrls.VERTICAL_20S
+        DemoMediaUrls.VERTICAL_5S,
+        DemoMediaUrls.VERTICAL_10S,
+        DemoMediaUrls.VERTICAL_5S,
+        DemoMediaUrls.VERTICAL_10S,
+        DemoMediaUrls.VERTICAL_5S,
+        DemoMediaUrls.VERTICAL_10S
     )
 
     val initialVerticalClips: List<VideoItem> = listOf(
@@ -443,7 +440,7 @@ object DemoDataFactory {
             creatorName = "أحمد المنصور",
             creatorHandle = "@ahmed_studio",
             creatorAvatarId = "av_creator",
-            duration = "00:38",
+            duration = "00:05",
             viewsCount = 412000,
             likesCount = 38400,
             sharesCount = 2450,
@@ -467,7 +464,7 @@ object DemoDataFactory {
             creatorName = "نور الإبداع",
             creatorHandle = "@noor_visuals",
             creatorAvatarId = "av_director",
-            duration = "00:24",
+            duration = "00:10",
             viewsCount = 289000,
             likesCount = 24100,
             sharesCount = 1980,
@@ -485,7 +482,7 @@ object DemoDataFactory {
             creatorName = "جيمر زون",
             creatorHandle = "@gamer_zone",
             creatorAvatarId = "av_bolt",
-            duration = "00:45",
+            duration = "00:05",
             viewsCount = 520000,
             likesCount = 49300,
             sharesCount = 3120,
@@ -503,7 +500,7 @@ object DemoDataFactory {
             creatorName = "أحمد المنصور",
             creatorHandle = "@ahmed_studio",
             creatorAvatarId = "av_creator",
-            duration = "00:31",
+            duration = "00:10",
             viewsCount = 195000,
             likesCount = 17800,
             sharesCount = 870,
@@ -522,7 +519,7 @@ object DemoDataFactory {
             creatorName = "استوديو بيان",
             creatorHandle = "@bayan_design",
             creatorAvatarId = "av_ring",
-            duration = "00:29",
+            duration = "00:05",
             viewsCount = 143000,
             likesCount = 12450,
             sharesCount = 740,
@@ -540,7 +537,7 @@ object DemoDataFactory {
             creatorName = "مذاق الشيف",
             creatorHandle = "@chef_taste",
             creatorAvatarId = "av_crown",
-            duration = "00:42",
+            duration = "00:10",
             viewsCount = 210000,
             likesCount = 19400,
             sharesCount = 1120,
@@ -558,7 +555,7 @@ object DemoDataFactory {
             creatorName = "رحالة الصحراء",
             creatorHandle = "@desert_wanderer",
             creatorAvatarId = "av_traveler",
-            duration = "00:35",
+            duration = "00:05",
             viewsCount = 380000,
             likesCount = 34200,
             sharesCount = 2100,
@@ -576,7 +573,7 @@ object DemoDataFactory {
             creatorName = "جيمر زون",
             creatorHandle = "@gamer_zone",
             creatorAvatarId = "av_gamer",
-            duration = "00:40",
+            duration = "00:10",
             viewsCount = 165000,
             likesCount = 15100,
             sharesCount = 940,
@@ -594,7 +591,7 @@ object DemoDataFactory {
             creatorName = "استوديو بيان",
             creatorHandle = "@bayan_design",
             creatorAvatarId = "av_badge",
-            duration = "00:28",
+            duration = "00:05",
             viewsCount = 112000,
             likesCount = 9800,
             sharesCount = 650,
@@ -612,7 +609,7 @@ object DemoDataFactory {
             creatorName = "نور الإبداع",
             creatorHandle = "@noor_visuals",
             creatorAvatarId = "av_director",
-            duration = "00:48",
+            duration = "00:10",
             viewsCount = 295000,
             likesCount = 27600,
             sharesCount = 1840,

@@ -9,7 +9,6 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -429,11 +428,9 @@ private fun ReelPageItem(
 
     val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
     val secondaryAccent = MaterialTheme.colorScheme.secondary
-    val likeScale by animateFloatAsState(
-        targetValue = if (clip.isLiked) 1.12f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "like_bounce"
-    )
+
+    // Hearts stay visually identical whether liked or not: neutral white only.
+    // The pulse/shake is driven by likePulseScale, not by clip.isLiked.
 
     // When the floating bottom bar hides, slide the overlay metadata down into
     // the freed space instead of keeping it floating above the (now empty) bar.
@@ -576,7 +573,7 @@ private fun ReelPageItem(
                             ReelActionButton(
                                 icon = Icons.Filled.Favorite,
                                 countText = formatCompactCount(clip.likesCount),
-                                tint = Color(0xFFFF2D55),
+                                tint = Color.White,
                                 contentDesc = "إعجاب",
                                 onClick = {
                                     onToggleLike()
@@ -586,8 +583,8 @@ private fun ReelPageItem(
                                 modifier = Modifier
                                     .graphicsLayer {
                                         rotationZ = likeShakeRotation.value
-                                        scaleX = likeScale * likePulseScale.value
-                                        scaleY = likeScale * likePulseScale.value
+                                        scaleX = likePulseScale.value
+                                        scaleY = likePulseScale.value
                                     }
                                     .testTag("clip_like_${clip.id}")
                             )
@@ -918,7 +915,7 @@ private fun ReelPageItem(
                                     CompactPillStatButton(
                                         icon = Icons.Filled.Favorite,
                                         text = formatCompactCount(clip.likesCount),
-                                        tint = Color(0xFFFF2D55),
+                                        tint = Color.White,
                                         contentDesc = "إعجاب",
                                         onClick = {
                                             onToggleLike()
@@ -928,8 +925,8 @@ private fun ReelPageItem(
                                         modifier = Modifier
                                             .graphicsLayer {
                                                 rotationZ = likeShakeRotation.value
-                                                scaleX = likeScale * likePulseScale.value
-                                                scaleY = likeScale * likePulseScale.value
+                                                scaleX = likePulseScale.value
+                                                scaleY = likePulseScale.value
                                             }
                                             .testTag("alt_clip_like_${clip.id}")
                                     )
@@ -1262,24 +1259,24 @@ fun ClipsHeartGlowBurstEffect(
                     .size(150.dp)
                     .scale(ring1Scale)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF2D55).copy(alpha = ring1Alpha * 0.5f))
-                    .border(2.5.dp, Color(0xFFFF6B8B).copy(alpha = ring1Alpha), CircleShape)
+                    .background(Color.White.copy(alpha = ring1Alpha * 0.16f))
+                    .border(2.5.dp, Color.White.copy(alpha = ring1Alpha * 0.75f), CircleShape)
             )
             Box(
                 modifier = Modifier
                     .size(110.dp)
                     .scale(ring2Scale)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF4D6D).copy(alpha = ring2Alpha * 0.4f))
-                    .border(2.dp, Color(0xFFFF9EBA).copy(alpha = ring2Alpha), CircleShape)
+                    .background(Color.White.copy(alpha = ring2Alpha * 0.12f))
+                    .border(2.dp, Color.White.copy(alpha = ring2Alpha * 0.55f), CircleShape)
             )
             Box(
                 modifier = Modifier
                     .size(70.dp)
                     .scale(ring3Scale)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF1643).copy(alpha = ring3Alpha * 0.3f))
-                    .border(1.5.dp, Color.White.copy(alpha = ring3Alpha * 0.95f), CircleShape)
+                    .background(Color.White.copy(alpha = ring3Alpha * 0.08f))
+                    .border(1.5.dp, Color.White.copy(alpha = ring3Alpha * 0.9f), CircleShape)
             )
         }
 
@@ -1299,7 +1296,7 @@ fun ClipsHeartGlowBurstEffect(
         Icon(
             imageVector = Icons.Filled.Favorite,
             contentDescription = null,
-            tint = Color(0xFFFF2D55),
+            tint = Color.White,
             modifier = Modifier
                 .size(116.dp)
                 .scale(heartScale.value)
@@ -1324,7 +1321,7 @@ fun ClipsHeartGlowBurstEffect(
             Icon(
                 imageVector = Icons.Filled.Favorite,
                 contentDescription = null,
-                tint = Color(0xFFFF4D6D).copy(alpha = alpha),
+                tint = Color.White.copy(alpha = alpha * 0.8f),
                 modifier = Modifier
                     .offset(x = offset.x.dp, y = offset.y.dp)
                     .scale(scales[index] * (0.6f + riseFraction * 0.6f))

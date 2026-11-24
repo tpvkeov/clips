@@ -42,8 +42,43 @@ enum class AppThemeAccent(
         labelAr = "قرمزي",
         swatchColor = Color(0xFFFF3B5C),
         secondarySwatch = Color(0xFF10B981)
-    )
+    );
+
+    companion object {
+        /**
+         * Maps the swatch chosen on the sign-in page to the closest full app
+         * theme. Exact swatches win first so green/yellow/blue/red choices stay
+         * predictable even when another color scheme is currently active.
+         */
+        fun fromArgb(argb: Int): AppThemeAccent {
+            val target = Color(argb)
+            entries.firstOrNull { it.swatchColor.isNearly(target) }?.let { return it }
+
+            return entries.minByOrNull { accent ->
+                val dark = buildColorScheme(accent, darkTheme = true)
+                val light = buildColorScheme(accent, darkTheme = false)
+                listOf(
+                    target.distanceTo(dark.primary),
+                    target.distanceTo(light.primary),
+                    target.distanceTo(dark.secondary) * 1.05,
+                    target.distanceTo(light.secondary) * 1.05,
+                    target.distanceTo(dark.tertiary) * 1.2,
+                    target.distanceTo(light.tertiary) * 1.2,
+                    target.distanceTo(accent.secondarySwatch) * 1.1
+                ).minOrNull() ?: Double.MAX_VALUE
+            } ?: ORANGE_GREEN
+        }
+    }
 }
+
+private fun Color.distanceTo(other: Color): Double {
+    val dr = (red - other.red).toDouble()
+    val dg = (green - other.green).toDouble()
+    val db = (blue - other.blue).toDouble()
+    return dr * dr + dg * dg + db * db
+}
+
+private fun Color.isNearly(other: Color): Boolean = distanceTo(other) < 0.0001
 
 enum class ButtonColorTarget(val id: String, val labelAr: String) {
     HOME_TAB("home", "الرئيسية"),
