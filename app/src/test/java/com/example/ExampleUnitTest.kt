@@ -152,23 +152,25 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun testReelsFeedStaysVerticalWithOneRareWideException() {
+  fun testReelsFeedIsVerticalOnly() {
     val viewModel = ClipsViewModel()
     val reels = viewModel.uiState.value.reelsClips
 
-    assertEquals(10, reels.count { it.orientation == VideoOrientation.VERTICAL })
-    assertEquals(1, reels.count { it.orientation == VideoOrientation.HORIZONTAL })
-    val exception = reels.first { it.orientation == VideoOrientation.HORIZONTAL }
-    assertFalse(
-      "Wide reels exception must have a real media URL",
-      exception.mediaUriString.isNullOrBlank()
-    )
-    assertTrue(
-      "Wide reels exception must be a playable MP4",
-      exception.mediaUriString!!.endsWith(".mp4", ignoreCase = true)
-    )
-    assertTrue("Wide exception must earn its place", exception.viewsCount >= 100_000)
-    assertTrue("Wide exception must be well liked", exception.likesCount >= 5_000)
+    assertEquals(DemoDataFactory.initialVerticalClips.size, reels.size)
+    assertTrue(reels.all { it.orientation == VideoOrientation.VERTICAL })
+    assertTrue(reels.none { it.mediaUriString.isNullOrBlank() })
+  }
+
+  @Test
+  fun testHorizontalVideoOpensPlayerInsteadOfReels() {
+    val viewModel = ClipsViewModel()
+    val horizontalId = DemoDataFactory.initialHorizontalVideos.first().id
+
+    viewModel.openClipInReels(horizontalId)
+
+    assertEquals(horizontalId, viewModel.uiState.value.activePlayerVideoId)
+    assertNull(viewModel.uiState.value.selectedClipId)
+    assertEquals(MainTab.HOME, viewModel.uiState.value.currentTab)
   }
 
   @Test
@@ -224,7 +226,7 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun testReelsSelectorHonoursExplicitlyOpenedWideVideo() {
+  fun testReelsSelectorNeverIncludesWideVideos() {
     val wide = DemoDataFactory.initialHorizontalVideos[3]
     val feed = ReelsFeedSelector.build(
       verticalClips = DemoDataFactory.initialVerticalClips,
@@ -232,7 +234,8 @@ class ExampleUnitTest {
       pinnedVideoId = wide.id
     )
 
-    assertTrue(feed.any { it.id == wide.id })
+    assertFalse(feed.any { it.id == wide.id })
+    assertTrue(feed.all { it.orientation == VideoOrientation.VERTICAL })
   }
 
   @Test

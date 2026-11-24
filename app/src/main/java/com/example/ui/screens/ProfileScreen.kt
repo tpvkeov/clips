@@ -321,7 +321,7 @@ fun ProfileScreen(
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = if (isGuest) {
-                                        "وضع الضيف — اضغط للتسجيل"
+                                        "سجّل الدخول للإعجاب والتعليق"
                                     } else {
                                         "حساب: ${userEmail.orEmpty()} • اضغط لتسجيل الخروج"
                                     },

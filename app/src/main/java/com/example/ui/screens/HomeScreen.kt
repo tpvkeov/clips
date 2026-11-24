@@ -270,7 +270,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "أنت ضيف • سجّل الدخول للإعجاب والمتابعة والتعليق",
+                                text = "سجّل الدخول للإعجاب والمتابعة والتعليق",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold

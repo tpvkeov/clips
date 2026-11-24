@@ -3,7 +3,7 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +17,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -64,9 +64,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -77,8 +79,8 @@ import com.example.model.AuthUiState
 import com.example.ui.theme.LocalCustomButtonColors
 
 /**
- * A polished sign-in / sign-up experience with soft animated orbs, a glass card,
- * rate-limit feedback and an explicit guest path.
+ * A solid sign-in / sign-up page with a rotating cinema-style border, four
+ * selectable accent colors, rate-limit feedback and an explicit guest path.
  */
 @Composable
 fun AuthScreen(
@@ -95,33 +97,31 @@ fun AuthScreen(
 ) {
     BackHandler(enabled = true) { onBack() }
 
-    val accent = LocalCustomButtonColors.current.actionButtonsColor
-        ?: MaterialTheme.colorScheme.primary
     val background = MaterialTheme.colorScheme.background
     val surface = MaterialTheme.colorScheme.surface
+    val secondary = MaterialTheme.colorScheme.secondary
+    val tertiary = MaterialTheme.colorScheme.tertiary
+    val baseAccent = LocalCustomButtonColors.current.actionButtonsColor
+        ?: MaterialTheme.colorScheme.primary
+    val colorChoices = remember(baseAccent, secondary, tertiary) {
+        listOf(baseAccent, secondary, tertiary, Color(0xFFFF3B5C))
+    }
+    var selectedColorIndex by remember { mutableStateOf(0) }
+    val accent = colorChoices[selectedColorIndex]
     val isRegister = state.mode == AuthMode.REGISTER
     val locked = state.remainingLockSeconds > 0 || state.lockUntilMillis > System.currentTimeMillis()
     var passwordVisible by remember { mutableStateOf(false) }
     var showDeviceInfo by remember { mutableStateOf(false) }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "auth_orbs")
-    val orbOne by infiniteTransition.animateFloat(
-        initialValue = -40f,
-        targetValue = 46f,
+    val infiniteTransition = rememberInfiniteTransition(label = "auth_cinema_border")
+    val borderRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(9_000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(3_600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "orb_one"
-    )
-    val orbTwo by infiniteTransition.animateFloat(
-        initialValue = 50f,
-        targetValue = -34f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(11_000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "orb_two"
+        label = "auth_border_rotation"
     )
 
     val enterScale by animateFloatAsState(
@@ -133,32 +133,8 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        accent.copy(alpha = 0.20f),
-                        background,
-                        background
-                    )
-                )
-            )
+            .background(background)
     ) {
-        Box(
-            modifier = Modifier
-                .size(260.dp)
-                .offset(x = (-70).dp, y = orbOne.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.36f), Color.Transparent)))
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(220.dp)
-                .offset(x = 40.dp, y = orbTwo.dp)
-                .clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFF38BDF8).copy(alpha = 0.22f), Color.Transparent)))
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -173,7 +149,7 @@ fun AuthScreen(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = surface.copy(alpha = 0.8f),
+                    color = surface,
                     modifier = Modifier.size(42.dp)
                 ) {
                     IconButton(onClick = onBack) {
@@ -193,10 +169,11 @@ fun AuthScreen(
                 Spacer(modifier = Modifier.weight(1f))
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = accent.copy(alpha = 0.14f)
+                    color = surface,
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.4f))
                 ) {
                     Text(
-                        text = "وضع الضيف متاح",
+                        text = "سجّل الدخول للإعجاب والتعليق",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = accent,
@@ -205,16 +182,73 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "اختر لون الواجهة",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                colorChoices.forEachIndexed { index, color ->
+                    val selected = index == selectedColorIndex
+                    Box(
+                        modifier = Modifier
+                            .size(if (selected) 34.dp else 28.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .border(
+                                width = if (selected) 3.dp else 1.dp,
+                                color = if (selected) MaterialTheme.colorScheme.onBackground else Color.White.copy(alpha = 0.65f),
+                                shape = CircleShape
+                            )
+                            .clickable { selectedColorIndex = index }
+                    )
+                }
+            }
 
-            Surface(
-                shape = RoundedCornerShape(30.dp),
-                color = surface.copy(alpha = 0.94f),
-                border = BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
-                shadowElevation = 18.dp,
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .scale(enterScale)
+                    .clip(RoundedCornerShape(30.dp))
+                    .drawBehind {
+                        rotate(degrees = borderRotation) {
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = colorChoices.map { it.copy(alpha = 0.28f) } + colorChoices.first().copy(alpha = 0.28f)
+                                ),
+                                radius = maxOf(size.width, size.height) * 0.82f,
+                                center = center
+                            )
+                        }
+                    }
+                    .padding(3.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .drawBehind {
+                        rotate(degrees = borderRotation) {
+                            drawCircle(
+                                brush = Brush.sweepGradient(
+                                    colors = colorChoices + colorChoices.first()
+                                ),
+                                radius = maxOf(size.width, size.height) * 0.82f,
+                                center = center
+                            )
+                        }
+                    }
+                    .padding(2.dp)
+            ) {
+            Surface(
+                shape = RoundedCornerShape(26.dp),
+                color = surface,
+                border = BorderStroke(1.dp, accent.copy(alpha = 0.22f)),
+                shadowElevation = 18.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
@@ -432,6 +466,7 @@ fun AuthScreen(
                     }
                 }
             }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
             OutlinedButton(
@@ -447,10 +482,9 @@ fun AuthScreen(
             Spacer(modifier = Modifier.height(12.dp))
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = surface.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                color = surface,
+                border = BorderStroke(1.dp, accent.copy(alpha = 0.2f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(

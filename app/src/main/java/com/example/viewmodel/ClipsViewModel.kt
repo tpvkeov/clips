@@ -139,13 +139,9 @@ data class ClipsUiState(
             matchesCategory && matchesQuery
         }
 
-    /** Reels are vertical-only apart from one rare, high-quality widescreen exception. */
+    /** Reels are strictly vertical; horizontal videos stay in Home/Posts players. */
     val reelsClips: List<VideoItem>
-        get() = ReelsFeedSelector.build(
-            verticalClips = verticalClips,
-            horizontalVideos = horizontalVideos,
-            pinnedVideoId = selectedClipId
-        )
+        get() = ReelsFeedSelector.build(verticalClips = verticalClips)
 
     val savedItems: List<VideoItem>
         get() = (horizontalVideos + verticalClips).filter { it.isSaved }
@@ -278,7 +274,13 @@ class ClipsViewModel(
         localStore?.let { store ->
             val savedVideoIds = store.loadSavedVideoIds()
             val savedPostIds = store.loadSavedPostIds()
-            val latest = store.loadWatchProgress().values.maxByOrNull { it.watchedAt }
+            val verticalClipIds = _uiState.value.verticalClips
+                .filter { it.orientation == VideoOrientation.VERTICAL }
+                .map { it.id }
+                .toSet()
+            val latest = store.loadWatchProgress().values
+                .filter { it.videoId in verticalClipIds }
+                .maxByOrNull { it.watchedAt }
             val exit = store.loadReelsExit()
             val now = System.currentTimeMillis()
             val freshExit = exit.isAccidental &&
@@ -441,6 +443,15 @@ class ClipsViewModel(
     }
 
     fun openClipInReels(clipId: String) {
+        val isVerticalClip = _uiState.value.verticalClips.any {
+            it.id == clipId && it.orientation == VideoOrientation.VERTICAL
+        }
+        if (!isVerticalClip) {
+            if (_uiState.value.horizontalVideos.any { it.id == clipId }) {
+                openVideoPlayer(clipId)
+            }
+            return
+        }
         _uiState.update {
             it.copy(
                 currentTab = MainTab.CLIPS,
@@ -625,15 +636,25 @@ class ClipsViewModel(
         }
     }
 
-    /** Continue only from a still-fresh, accidental exit (never after a deliberate one). */
+    /** Continue only from a still-fresh, accidental exit on a vertical clip. */
     fun resumeWatching() {
-        val candidate = _uiState.value.resumeCandidateId ?: return
-        _uiState.update { state ->
-            state.copy(
+        val state = _uiState.value
+        val candidate = state.resumeCandidateId ?: return
+        val isVerticalClip = state.verticalClips.any {
+            it.id == candidate && it.orientation == VideoOrientation.VERTICAL
+        }
+        if (!isVerticalClip) {
+            _uiState.update {
+                it.copy(resumeCandidateId = null, continueWatching = null)
+            }
+            return
+        }
+        _uiState.update {
+            it.copy(
                 currentTab = MainTab.CLIPS,
                 selectedClipId = candidate,
                 resumeCandidateId = candidate,
-                clipsSessionToken = state.clipsSessionToken + 1,
+                clipsSessionToken = it.clipsSessionToken + 1,
                 activeCreatorHandle = null,
                 isBottomBarVisible = true
             )
@@ -641,6 +662,10 @@ class ClipsViewModel(
     }
 
     fun recordWatchProgress(videoId: String, progress: Float) {
+        val isVerticalClip = _uiState.value.verticalClips.any {
+            it.id == videoId && it.orientation == VideoOrientation.VERTICAL
+        }
+        if (!isVerticalClip) return
         val entry = WatchProgress(videoId, progress.coerceIn(0f, 1f), System.currentTimeMillis())
         localStore?.saveWatchProgress(videoId, entry.progress)
         _uiState.update { state ->
@@ -658,9 +683,14 @@ class ClipsViewModel(
         if (_uiState.value.currentTab != MainTab.CLIPS) return
         localStore?.saveReelsExit(accidental = true)
         _uiState.update { state ->
+            val verticalLast = state.lastWatched?.takeIf { progress ->
+                state.verticalClips.any {
+                    it.id == progress.videoId && it.orientation == VideoOrientation.VERTICAL
+                }
+            }
             state.copy(
-                resumeCandidateId = state.lastWatched?.videoId,
-                continueWatching = state.lastWatched?.let {
+                resumeCandidateId = verticalLast?.videoId,
+                continueWatching = verticalLast?.let {
                     ContinueWatchingInfo(it.videoId, it.progress)
                 }
             )

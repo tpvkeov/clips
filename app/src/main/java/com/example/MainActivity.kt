@@ -163,8 +163,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
     }
 
     val continueWatchingVideo = state.continueWatching?.videoId?.let { id ->
-        state.verticalClips.find { it.id == id }
-            ?: state.horizontalVideos.find { it.id == id }
+        state.verticalClips.firstOrNull { it.id == id }
     }
 
     LaunchedEffect(state.feedbackMessage) {
@@ -293,7 +292,13 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onReportPost = viewModel::reportPost,
                             savedVideos = state.savedItems,
                             savedPosts = state.savedPosts,
-                            onOpenSavedVideo = viewModel::openClipInReels,
+                            onOpenSavedVideo = { videoId ->
+                                if (state.horizontalVideos.any { it.id == videoId }) {
+                                    viewModel.openVideoPlayer(videoId)
+                                } else {
+                                    viewModel.openClipInReels(videoId)
+                                }
+                            },
                             onOpenSavedPost = { postId -> pendingPostScrollId = postId },
                             scrollToPostId = pendingPostScrollId,
                             onPostScrollHandled = { pendingPostScrollId = null },
