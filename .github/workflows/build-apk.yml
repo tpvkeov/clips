@@ -76,6 +76,22 @@ jobs:
           fi
           base64 -d debug.keystore.base64 > debug.keystore
 
+      - name: Configure Supabase for the APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::SUPABASE_URL/SUPABASE_ANON_KEY secrets are not set; APK will use the public demo fallback"
+            exit 0
+          fi
+          {
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            echo "SUPABASE_FUNCTIONS_URL=$SUPABASE_URL/functions/v1"
+          } > .env
+          echo "Wrote gitignored .env for this build"
+
       - name: Build Debug APK
         env:
           BUILD_VERSION_CODE: ${{ steps.version.outputs.code }}
