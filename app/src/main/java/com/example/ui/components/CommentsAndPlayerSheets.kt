@@ -126,6 +126,7 @@ import com.example.model.CommentItem
 import com.example.model.MediaVisualStyle
 import com.example.model.PostItem
 import com.example.model.VideoItem
+import com.example.ui.components.LikeHeartRed
 import com.example.ui.theme.LocalCustomButtonColors
 import kotlinx.coroutines.delay
 
@@ -1343,6 +1344,7 @@ private fun VideoDetailsAndActionsColumn(
                 icon = if (video.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                 label = formatCompactCount(video.likesCount),
                 active = video.isLiked,
+                activeTint = LikeHeartRed,
                 onClick = onToggleLike,
                 modifier = Modifier.weight(1f)
             )
@@ -2579,12 +2581,14 @@ private fun PlayerActionChip(
     label: String,
     active: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeTint: Color? = null
 ) {
     val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
+    val tint = if (active) (activeTint ?: actionAccent) else MaterialTheme.colorScheme.onSurface
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (active) actionAccent.copy(alpha = 0.18f)
+        color = if (active) tint.copy(alpha = 0.18f)
         else MaterialTheme.colorScheme.surfaceVariant,
         modifier = modifier
             .height(44.dp)
@@ -2598,14 +2602,14 @@ private fun PlayerActionChip(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (active) actionAccent else MaterialTheme.colorScheme.onSurface,
+                tint = tint,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = if (active) actionAccent else MaterialTheme.colorScheme.onSurface
+                color = tint
             )
         }
     }

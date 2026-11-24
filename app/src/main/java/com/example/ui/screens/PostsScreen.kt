@@ -83,6 +83,7 @@ import com.example.model.UserProfile
 import com.example.model.VideoItem
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.HighQualityAvatarView
+import com.example.ui.components.LikeHeartRed
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.cloudyLightHeader
 import com.example.ui.components.formatCompactCount
@@ -607,7 +608,7 @@ private fun PostCardItem(
                 PostFooterButton(
                     icon = if (post.isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     label = "إعجاب (${formatCompactCount(post.likesCount)})",
-                    tint = if (post.isLiked) MaterialTheme.colorScheme.primary
+                    tint = if (post.isLiked) LikeHeartRed
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = onToggleLike,
                     modifier = Modifier.weight(1f)

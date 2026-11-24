@@ -98,6 +98,7 @@ import com.example.model.VideoItem
 import com.example.ui.components.CircularSaveWaterButton
 import com.example.ui.components.ClipsBrandIcon
 import com.example.ui.components.HighQualityAvatarView
+import com.example.ui.components.LikeHeartRed
 import com.example.ui.components.MediaSceneArtwork
 import com.example.ui.components.formatCompactCount
 import com.example.ui.theme.LocalCustomButtonColors
@@ -432,9 +433,9 @@ private fun ReelPageItem(
 
     val actionAccent = LocalCustomButtonColors.current.actionButtonsColor ?: MaterialTheme.colorScheme.primary
     val secondaryAccent = MaterialTheme.colorScheme.secondary
+    val likeTint = if (clip.isLiked) LikeHeartRed else Color.White
 
-    // Hearts stay visually identical whether liked or not: neutral white only.
-    // The pulse/shake is driven by likePulseScale, not by clip.isLiked.
+    // The pulse/shake is driven by likePulseScale; the red tint follows clip.isLiked.
 
     // When the floating bottom bar hides, slide the overlay metadata down into
     // the freed space instead of keeping it floating above the (now empty) bar.
@@ -577,7 +578,9 @@ private fun ReelPageItem(
                             ReelActionButton(
                                 icon = Icons.Filled.Favorite,
                                 countText = formatCompactCount(clip.likesCount),
-                                tint = Color.White,
+                                tint = likeTint,
+                                isActive = clip.isLiked,
+                                activeTint = LikeHeartRed,
                                 contentDesc = "إعجاب",
                                 onClick = {
                                     onToggleLike()
@@ -938,7 +941,9 @@ private fun ReelPageItem(
                                     CompactPillStatButton(
                                         icon = Icons.Filled.Favorite,
                                         text = formatCompactCount(clip.likesCount),
-                                        tint = Color.White,
+                                        tint = likeTint,
+                                        isActive = clip.isLiked,
+                                        activeTint = LikeHeartRed,
                                         contentDesc = "إعجاب",
                                         onClick = {
                                             onToggleLike()
@@ -1091,12 +1096,17 @@ private fun CompactPillStatButton(
     tint: Color,
     contentDesc: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isActive: Boolean = false,
+    activeTint: Color = LikeHeartRed
 ) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = Color.Black.copy(alpha = 0.45f),
-        border = BorderStroke(0.75.dp, Color.White.copy(alpha = 0.14f)),
+        color = if (isActive) activeTint.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.45f),
+        border = BorderStroke(
+            width = if (isActive) 1.5.dp else 0.75.dp,
+            color = if (isActive) activeTint.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.14f)
+        ),
         modifier = modifier
             .height(42.dp)
             .clip(RoundedCornerShape(50))
@@ -1171,7 +1181,9 @@ private fun ReelActionButton(
     tint: Color,
     contentDesc: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isActive: Boolean = false,
+    activeTint: Color = LikeHeartRed
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1185,7 +1197,15 @@ private fun ReelActionButton(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.35f)),
+                .background(
+                    if (isActive) activeTint.copy(alpha = 0.18f)
+                    else Color.Black.copy(alpha = 0.35f)
+                )
+                .border(
+                    width = if (isActive) 1.5.dp else 0.dp,
+                    color = activeTint.copy(alpha = 0.85f),
+                    shape = CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1282,24 +1302,24 @@ fun ClipsHeartGlowBurstEffect(
                     .size(150.dp)
                     .scale(ring1Scale)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = ring1Alpha * 0.16f))
-                    .border(2.5.dp, Color.White.copy(alpha = ring1Alpha * 0.75f), CircleShape)
+                    .background(LikeHeartRed.copy(alpha = ring1Alpha * 0.16f))
+                    .border(2.5.dp, LikeHeartRed.copy(alpha = ring1Alpha * 0.75f), CircleShape)
             )
             Box(
                 modifier = Modifier
                     .size(110.dp)
                     .scale(ring2Scale)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = ring2Alpha * 0.12f))
-                    .border(2.dp, Color.White.copy(alpha = ring2Alpha * 0.55f), CircleShape)
+                    .background(LikeHeartRed.copy(alpha = ring2Alpha * 0.12f))
+                    .border(2.dp, Color(0xFFFF6B81).copy(alpha = ring2Alpha * 0.55f), CircleShape)
             )
             Box(
                 modifier = Modifier
                     .size(70.dp)
                     .scale(ring3Scale)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = ring3Alpha * 0.08f))
-                    .border(1.5.dp, Color.White.copy(alpha = ring3Alpha * 0.9f), CircleShape)
+                    .background(LikeHeartRed.copy(alpha = ring3Alpha * 0.08f))
+                    .border(1.5.dp, Color(0xFFFF8FA3).copy(alpha = ring3Alpha * 0.9f), CircleShape)
             )
         }
 
@@ -1319,7 +1339,7 @@ fun ClipsHeartGlowBurstEffect(
         Icon(
             imageVector = Icons.Filled.Favorite,
             contentDescription = null,
-            tint = Color.White,
+            tint = LikeHeartRed,
             modifier = Modifier
                 .size(116.dp)
                 .scale(heartScale.value)
@@ -1344,7 +1364,7 @@ fun ClipsHeartGlowBurstEffect(
             Icon(
                 imageVector = Icons.Filled.Favorite,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = alpha * 0.8f),
+                tint = LikeHeartRed.copy(alpha = alpha * 0.8f),
                 modifier = Modifier
                     .offset(x = offset.x.dp, y = offset.y.dp)
                     .scale(scales[index] * (0.6f + riseFraction * 0.6f))

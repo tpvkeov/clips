@@ -66,6 +66,13 @@ data class SaveFeedbackEvent(
     val isSaving: Boolean
 )
 
+/** Drives the enlarged red heart animation whenever a like is added. */
+data class LikeFeedbackEvent(
+    val id: Long,
+    val itemId: String,
+    val isLiking: Boolean
+)
+
 data class ShareFeedbackEvent(
     val id: Long
 )
@@ -129,6 +136,7 @@ data class ClipsUiState(
     /** Incremented after a successful server upload to show the success card. */
     val uploadSuccessEvent: Long = 0L,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
+    val likeFeedbackEvent: LikeFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
     val lastWatched: WatchProgress? = null,
     val resumeCandidateId: String? = null,
@@ -233,6 +241,15 @@ class ClipsViewModel(
 ) : ViewModel() {
     companion object {
         private const val RESUME_WINDOW_MS = 60L * 60L * 1000L
+    }
+
+    /** Compresses picked videos before upload so playback is hardware-decoded and smooth. */
+    private suspend fun prepareVideoForUpload(context: Context, source: Uri): Uri {
+        val processor = videoProcessor ?: return source
+        val processed = withContext(Dispatchers.IO) { processor.process(source.toString()) }
+        val uri = processed?.mediaUriString?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        return uri ?: source
     }
 
     /** Keeps the real server error visible so the user can copy and send it. */
@@ -1050,6 +1067,9 @@ class ClipsViewModel(
 
     fun toggleLikeVideo(videoId: String) {
         if (!requireEngagementAuth(PendingEngagement.LikeVideo(videoId))) return
+        val snapshot = _uiState.value
+        val willLike = (snapshot.horizontalVideos.find { it.id == videoId }
+            ?: snapshot.verticalClips.find { it.id == videoId })?.let { !it.isLiked } ?: false
         _uiState.update { state ->
             state.copy(
                 horizontalVideos = state.horizontalVideos.map { video ->
@@ -1069,7 +1089,14 @@ class ClipsViewModel(
                             likesCount = if (liked) clip.likesCount + 1 else (clip.likesCount - 1).coerceAtLeast(0)
                         )
                     } else clip
-                }
+                },
+                likeFeedbackEvent = if (willLike) {
+                    LikeFeedbackEvent(
+                        id = (state.likeFeedbackEvent?.id ?: 0L) + 1L,
+                        itemId = videoId,
+                        isLiking = true
+                    )
+                } else state.likeFeedbackEvent
             )
         }
     }
@@ -1199,6 +1226,7 @@ class ClipsViewModel(
 
     fun toggleLikePost(postId: String) {
         if (!requireEngagementAuth(PendingEngagement.LikePost(postId))) return
+        val willLike = _uiState.value.posts.find { it.id == postId }?.let { !it.isLiked } ?: false
         _uiState.update { state ->
             state.copy(
                 posts = state.posts.map { post ->
@@ -1209,7 +1237,14 @@ class ClipsViewModel(
                             likesCount = if (liked) post.likesCount + 1 else (post.likesCount - 1).coerceAtLeast(0)
                         )
                     } else post
-                }
+                },
+                likeFeedbackEvent = if (willLike) {
+                    LikeFeedbackEvent(
+                        id = (state.likeFeedbackEvent?.id ?: 0L) + 1L,
+                        itemId = postId,
+                        isLiking = true
+                    )
+                } else state.likeFeedbackEvent
             )
         }
     }
@@ -1386,9 +1421,10 @@ class ClipsViewModel(
 
         _uiState.update { it.copy(feedbackMessage = null, uploadProgress = 0f) }
         viewModelScope.launch {
+            val uploadUri = prepareVideoForUpload(context, mediaUri)
             val uploadResult = SupabaseUploader.uploadVideo(
                 context = context,
-                mediaUri = mediaUri,
+                mediaUri = uploadUri,
                 title = title.trim(),
                 description = description.trim(),
                 isVertical = contentType == UploadContentType.VERTICAL_CLIP,
@@ -1401,7 +1437,7 @@ class ClipsViewModel(
 
             publishFromUploadLocal(
                 contentType, title, description, category, visualStyle,
-                uploadedUrl ?: mediaUriString, avatarOverlayId
+                uploadedUrl ?: uploadUri.toString(), avatarOverlayId
             )
             if (uploadedUrl == null) {
                 _uiState.update {
@@ -1561,9 +1597,10 @@ class ClipsViewModel(
             val resolvedTitle = videoTitle.trim().ifEmpty {
                 content.trim().take(48).ifEmpty { "فيديو أفقي جديد من ${_uiState.value.userProfile.name}" }
             }
+            val uploadUri = prepareVideoForUpload(context, mediaUri)
             val uploadResult = SupabaseUploader.uploadVideo(
                 context = context,
-                mediaUri = mediaUri,
+                mediaUri = uploadUri,
                 title = resolvedTitle,
                 description = content.trim(),
                 isVertical = false,
@@ -1574,7 +1611,7 @@ class ClipsViewModel(
             )
             val uploadedUrl = uploadResult.getOrNull()
 
-            publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, uploadedUrl ?: mediaUriString, fallbackStyle)
+            publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, uploadedUrl ?: uploadUri.toString(), fallbackStyle)
             if (uploadedUrl == null) {
                 _uiState.update {
                     it.copy(

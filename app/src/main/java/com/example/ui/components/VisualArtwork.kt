@@ -85,6 +85,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.example.data.MediaPlaybackCache
@@ -611,12 +612,16 @@ fun MediaSceneArtwork(
                                                 isVideoRendering = false
                                                 val surf = Surface(surfaceTexture)
                                                 attachedSurface = surf
+                                                val loadControl = DefaultLoadControl.Builder()
+                                                    .setBufferDurationsMs(1_500, 6_000, 1_000, 2_000)
+                                                    .build()
                                                 val player = ExoPlayer.Builder(ctx)
                                                     .setMediaSourceFactory(
                                                         DefaultMediaSourceFactory(
                                                             MediaPlaybackCache.dataSourceFactory(ctx)
                                                         )
                                                     )
+                                                    .setLoadControl(loadControl)
                                                     .build()
                                                 activePlayer = player
                                                 runCatching {

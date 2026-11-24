@@ -61,6 +61,7 @@ import com.example.ui.components.CommentsBottomSheet
 import com.example.ui.components.DeviceBanGate
 import com.example.ui.components.FloatingPillBottomBar
 import com.example.ui.components.HorizontalVideoPlayerSheet
+import com.example.ui.components.LikeHeartFillAnimationOverlay
 import com.example.ui.components.ReportBottomSheet
 import com.example.ui.components.SaveLiquidAnimationOverlay
 import com.example.ui.components.ShareFeedbackOverlay
@@ -557,6 +558,10 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
 
                 SaveLiquidAnimationOverlay(
                     event = state.saveFeedbackEvent
+                )
+
+                LikeHeartFillAnimationOverlay(
+                    event = state.likeFeedbackEvent
                 )
 
                 ShareFeedbackOverlay(
