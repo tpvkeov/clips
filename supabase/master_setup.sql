@@ -809,7 +809,7 @@ CREATE TABLE IF NOT EXISTS public.storage_usage (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO public.storage_usage(bucket, limit_bytes)
-VALUES ('b2-videos', 10737418240)
+VALUES ('clips-videos', 10737418240)
 ON CONFLICT (bucket) DO NOTHING;
 
 ALTER TABLE public.storage_usage ENABLE ROW LEVEL SECURITY;
@@ -1124,7 +1124,7 @@ BEGIN
         RAISE EXCEPTION 'upload_not_allowed: %', v_check->>'reason' USING ERRCODE = '22023';
     END IF;
 
-    SELECT * INTO v_limit FROM public.storage_usage WHERE bucket = 'b2-videos';
+    SELECT * INTO v_limit FROM public.storage_usage WHERE bucket = 'clips-videos';
 
     IF COALESCE(v_limit.used_bytes,0) + p_expected_size
        + COALESCE((SELECT SUM(expected_size) FROM public.b2_upload_sessions
@@ -1186,7 +1186,7 @@ BEGIN
 
     UPDATE public.storage_usage
     SET used_bytes = GREATEST(used_bytes + p_size_bytes, 0), updated_at = now()
-    WHERE bucket = 'b2-videos';
+    WHERE bucket = 'clips-videos';
 
     RETURN TRUE;
 END;
@@ -1210,7 +1210,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
         'used_bytes', used_bytes,
         'limit_bytes', limit_bytes,
         'remaining_bytes', GREATEST(limit_bytes - used_bytes, 0)
-    ) FROM public.storage_usage WHERE bucket = 'b2-videos';
+    ) FROM public.storage_usage WHERE bucket = 'clips-videos';
 $$;
 
 REVOKE ALL ON FUNCTION public.reserve_b2_upload_session(UUID, BIGINT, TEXT, TEXT) FROM anon, authenticated;
