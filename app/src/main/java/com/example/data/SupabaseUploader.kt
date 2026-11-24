@@ -71,10 +71,15 @@ object SupabaseUploader {
                 .addHeader("Content-Type", mime)
                 .build()
 
-            http.newCall(put).execute().use { response ->
+            val fileId = http.newCall(put).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    throw IOException("فشل رفع B2: HTTP ${response.code} ${response.body?.string().orEmpty().take(300)}")
+                    throw IOException("فشل رفع B2: HTTP ${response.code} ${raw.take(300)}")
                 }
+                runCatching { JSONObject(raw).optString("fileId") }.getOrDefault("").trim()
+            }
+            if (fileId.isBlank()) {
+                throw IOException("استجابة رفع B2 غير صالحة: fileId مفقود")
             }
 
             val commit = SupabaseClient.callFunction(
@@ -88,6 +93,7 @@ object SupabaseUploader {
                     .put("sizeBytes", bytes.size)
                     .put("duration", durationSeconds)
                     .put("b2Key", b2Key)
+                    .put("fileId", fileId)
                     .put("publicUrl", publicUrl)
                     .put("uploadType", uploadType)
             ).getOrThrow()
