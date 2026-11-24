@@ -251,6 +251,19 @@ class ClipsViewModel(
     companion object {
         private const val RESUME_WINDOW_MS = 60L * 60L * 1000L
     }
+
+    /** Keeps the real server error visible so the user can copy and send it. */
+    private fun uploadFailureMessage(error: Throwable?): String {
+        val parts = mutableListOf<String>()
+        var current = error
+        while (current != null && parts.size < 3) {
+            current.message?.trim()?.takeIf { it.isNotBlank() }?.let { parts.add(it) }
+            current = current.cause
+        }
+        val reason = parts.joinToString(" ← ").ifBlank { "خطأ غير معروف" }
+        return "تعذر رفع الفيديو على السيرفر، سيُعرض على الجهاز فقط\nالسبب: ${reason.take(500)}"
+    }
+
     private val _uiState = MutableStateFlow(ClipsUiState())
     val uiState: StateFlow<ClipsUiState> = _uiState.asStateFlow()
 
@@ -1293,14 +1306,15 @@ class ClipsViewModel(
 
         _uiState.update { it.copy(feedbackMessage = "جارٍ رفع الفيديو على السيرفر...") }
         viewModelScope.launch {
-            val uploadedUrl = SupabaseUploader.uploadVideo(
+            val uploadResult = SupabaseUploader.uploadVideo(
                 context = context,
                 mediaUri = mediaUri,
                 title = title.trim(),
                 description = description.trim(),
                 isVertical = contentType == UploadContentType.VERTICAL_CLIP,
                 uploadType = if (contentType == UploadContentType.VERTICAL_CLIP) "short" else "wide"
-            ).getOrNull()
+            )
+            val uploadedUrl = uploadResult.getOrNull()
 
             publishFromUploadLocal(
                 contentType, title, description, category, visualStyle,
@@ -1308,7 +1322,7 @@ class ClipsViewModel(
             )
             if (uploadedUrl == null) {
                 _uiState.update {
-                    it.copy(feedbackMessage = "تعذر رفع الفيديو على السيرفر، سيُعرض على الجهاز فقط")
+                    it.copy(feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull()))
                 }
             }
         }
@@ -1453,19 +1467,20 @@ class ClipsViewModel(
             val resolvedTitle = videoTitle.trim().ifEmpty {
                 content.trim().take(48).ifEmpty { "فيديو أفقي جديد من ${_uiState.value.userProfile.name}" }
             }
-            val uploadedUrl = SupabaseUploader.uploadVideo(
+            val uploadResult = SupabaseUploader.uploadVideo(
                 context = context,
                 mediaUri = mediaUri,
                 title = resolvedTitle,
                 description = content.trim(),
                 isVertical = false,
                 uploadType = "wide"
-            ).getOrNull()
+            )
+            val uploadedUrl = uploadResult.getOrNull()
 
             publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, uploadedUrl ?: mediaUriString, fallbackStyle)
             if (uploadedUrl == null) {
                 _uiState.update {
-                    it.copy(feedbackMessage = "تعذر رفع الفيديو على السيرفر، سيُعرض على الجهاز فقط")
+                    it.copy(feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull()))
                 }
             }
         }

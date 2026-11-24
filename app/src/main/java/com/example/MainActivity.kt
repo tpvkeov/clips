@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -34,8 +35,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -166,10 +169,20 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
         state.verticalClips.firstOrNull { it.id == id }
     }
 
+    val clipboardManager = LocalClipboardManager.current
     LaunchedEffect(state.feedbackMessage) {
         val message = state.feedbackMessage
         if (message != null) {
-            snackbarHostState.showSnackbar(message)
+            val canCopy = message.contains("تعذر رفع الفيديو على السيرفر")
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = if (canCopy) "نسخ" else null,
+                withDismissAction = canCopy
+            )
+            if (result == SnackbarResult.ActionPerformed && canCopy) {
+                clipboardManager.setText(AnnotatedString(message))
+                snackbarHostState.showSnackbar("تم نسخ رسالة الخطأ ✅")
+            }
             viewModel.consumeFeedback()
         }
     }
