@@ -64,6 +64,8 @@ import com.example.ui.components.ReportBottomSheet
 import com.example.ui.components.SaveLiquidAnimationOverlay
 import com.example.ui.components.ShareFeedbackOverlay
 import com.example.ui.components.StoryViewerOverlay
+import com.example.ui.components.UploadProgressOverlay
+import com.example.ui.components.UploadSuccessOverlay
 import com.example.ui.components.UpdateAvailableDialog
 import com.example.update.AppUpdateChecker
 import com.example.update.AppUpdateInfo
@@ -528,6 +530,9 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                     event = state.shareFeedbackEvent,
                     onDismiss = viewModel::clearShareFeedback
                 )
+
+                UploadProgressOverlay(progress = state.uploadProgress)
+                UploadSuccessOverlay(event = state.uploadSuccessEvent)
 
                 updateInfo?.let { info ->
                     key(info.versionCode) {

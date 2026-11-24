@@ -110,6 +110,10 @@ data class ClipsUiState(
     val commentsTarget: CommentsTarget? = null,
     val clipsLayoutMode: ClipsLayoutMode = ClipsLayoutMode.PRIMARY,
     val feedbackMessage: String? = null,
+    /** 0..1 while a server upload is running; null when idle. */
+    val uploadProgress: Float? = null,
+    /** Incremented after a successful server upload to show the success card. */
+    val uploadSuccessEvent: Long = 0L,
     val saveFeedbackEvent: SaveFeedbackEvent? = null,
     val shareFeedbackEvent: ShareFeedbackEvent? = null,
     val rewardedSharedContentIds: Set<String> = emptySet(),
@@ -1304,7 +1308,7 @@ class ClipsViewModel(
             return
         }
 
-        _uiState.update { it.copy(feedbackMessage = "جارٍ رفع الفيديو على السيرفر...") }
+        _uiState.update { it.copy(feedbackMessage = null, uploadProgress = 0f) }
         viewModelScope.launch {
             val uploadResult = SupabaseUploader.uploadVideo(
                 context = context,
@@ -1312,7 +1316,10 @@ class ClipsViewModel(
                 title = title.trim(),
                 description = description.trim(),
                 isVertical = contentType == UploadContentType.VERTICAL_CLIP,
-                uploadType = if (contentType == UploadContentType.VERTICAL_CLIP) "short" else "wide"
+                uploadType = if (contentType == UploadContentType.VERTICAL_CLIP) "short" else "wide",
+                onProgress = { progress ->
+                    _uiState.update { it.copy(uploadProgress = progress.coerceIn(0f, 1f)) }
+                }
             )
             val uploadedUrl = uploadResult.getOrNull()
 
@@ -1322,7 +1329,18 @@ class ClipsViewModel(
             )
             if (uploadedUrl == null) {
                 _uiState.update {
-                    it.copy(feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull()))
+                    it.copy(
+                        uploadProgress = null,
+                        feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull())
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        uploadProgress = null,
+                        uploadSuccessEvent = it.uploadSuccessEvent + 1,
+                        feedbackMessage = null
+                    )
                 }
             }
         }
@@ -1462,7 +1480,7 @@ class ClipsViewModel(
             return
         }
 
-        _uiState.update { it.copy(feedbackMessage = "جارٍ رفع الفيديو على السيرفر...") }
+        _uiState.update { it.copy(feedbackMessage = null, uploadProgress = 0f) }
         viewModelScope.launch {
             val resolvedTitle = videoTitle.trim().ifEmpty {
                 content.trim().take(48).ifEmpty { "فيديو أفقي جديد من ${_uiState.value.userProfile.name}" }
@@ -1473,14 +1491,28 @@ class ClipsViewModel(
                 title = resolvedTitle,
                 description = content.trim(),
                 isVertical = false,
-                uploadType = "wide"
+                uploadType = "wide",
+                onProgress = { progress ->
+                    _uiState.update { it.copy(uploadProgress = progress.coerceIn(0f, 1f)) }
+                }
             )
             val uploadedUrl = uploadResult.getOrNull()
 
             publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, uploadedUrl ?: mediaUriString, fallbackStyle)
             if (uploadedUrl == null) {
                 _uiState.update {
-                    it.copy(feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull()))
+                    it.copy(
+                        uploadProgress = null,
+                        feedbackMessage = uploadFailureMessage(uploadResult.exceptionOrNull())
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        uploadProgress = null,
+                        uploadSuccessEvent = it.uploadSuccessEvent + 1,
+                        feedbackMessage = null
+                    )
                 }
             }
         }

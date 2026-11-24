@@ -34,8 +34,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.StayCurrentLandscape
-import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
@@ -325,11 +323,6 @@ fun UploadStudioScreen(
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = "يتم التعرف تلقائياً على المقاس (أفقي للرئيسية أو طولي لـ clips)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = secondaryAccent
-                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -386,101 +379,6 @@ fun UploadStudioScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "توجيه المحتوى التلقائي",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (capturedOrPickedUri != null) primaryAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (capturedOrPickedUri != null) primaryAccent.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("upload_auto_detected_type_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (capturedOrPickedUri != null) primaryAccent else MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (selectedType == UploadContentType.VERTICAL_CLIP)
-                                    Icons.Filled.StayCurrentPortrait
-                                else
-                                    Icons.Filled.StayCurrentLandscape,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = if (capturedOrPickedUri != null) {
-                                        if (selectedType == UploadContentType.VERTICAL_CLIP)
-                                            "النوع المحدد تلقائياً: مقطع طولي (clips)"
-                                        else
-                                            "النوع المحدد تلقائياً: فيديو أفقي عريض"
-                                    } else {
-                                        "التعرف التلقائي على أبعاد الفيديو"
-                                    },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (capturedOrPickedUri != null) primaryAccent else MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = secondaryAccent.copy(alpha = 0.2f)
-                                ) {
-                                    Text(
-                                        text = "تلقائي ✨",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = secondaryAccent,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Text(
-                                text = if (capturedOrPickedUri != null) {
-                                    if (selectedType == UploadContentType.VERTICAL_CLIP)
-                                        "سيتم النشر مباشرة في تبويب مقاطع clips"
-                                    else
-                                        "سيتم النشر مباشرة في الصفحة الرئيسية والمنشورات"
-                                } else {
-                                    "يتم فحص أبعاد الفيديو فور اختياره وتوجيهه للرئيسية أو clips تلقائياً"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },

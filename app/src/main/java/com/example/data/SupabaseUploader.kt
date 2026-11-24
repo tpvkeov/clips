@@ -4,10 +4,12 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
+import okio.BufferedSink
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
@@ -30,7 +32,8 @@ object SupabaseUploader {
         description: String,
         isVertical: Boolean,
         uploadType: String = if (isVertical) "short" else "wide",
-        durationSeconds: Double = 0.0
+        durationSeconds: Double = 0.0,
+        onProgress: (Float) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             if (!SupabaseClient.isConfigured) throw IOException("SUPABASE_NOT_CONFIGURED")
@@ -40,6 +43,7 @@ object SupabaseUploader {
             val bytes = context.contentResolver.openInputStream(mediaUri)?.use { it.readBytes() }
                 ?: throw IOException("تعذر قراءة الملف")
             if (bytes.isEmpty()) throw IOException("الملف فارغ")
+            onProgress(0.02f)
 
             val b2Key = "clips_${System.currentTimeMillis()}_${UUID.randomUUID()}.${extensionFor(mime)}"
             val ticket = SupabaseClient.callFunction(
@@ -58,13 +62,18 @@ object SupabaseUploader {
             if (uploadUrl.isBlank() || uploadToken.isBlank() || sessionId.isBlank() || publicUrl.isBlank()) {
                 throw IOException("استجابة رفع غير صالحة من السيرفر")
             }
+            onProgress(0.08f)
 
             val sha1 = MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+            val uploadBody = ProgressRequestBody(bytes, mime.toMediaType()) { fraction ->
+                // Reading/ticket take 0..0.08, the B2 transfer 0.12..0.88.
+                onProgress(0.12f + 0.76f * fraction.coerceIn(0f, 1f))
+            }
             val put = Request.Builder()
                 .url(uploadUrl)
                 // B2 Native API's b2_upload_file accepts POST only (PUT is the
                 // S3-compatible API). OkHttp sets Content-Length for byte bodies.
-                .post(bytes.toRequestBody(mime.toMediaType()))
+                .post(uploadBody)
                 .addHeader("Authorization", uploadToken)
                 .addHeader("X-Bz-File-Name", URLEncoder.encode(b2Key, "UTF-8"))
                 .addHeader("X-Bz-Content-Sha1", sha1)
@@ -81,6 +90,7 @@ object SupabaseUploader {
             if (fileId.isBlank()) {
                 throw IOException("استجابة رفع B2 غير صالحة: fileId مفقود")
             }
+            onProgress(0.92f)
 
             val commit = SupabaseClient.callFunction(
                 "commit-video",
@@ -103,7 +113,31 @@ object SupabaseUploader {
 
             // The database keeps the plain B2 URL; the app receives a tokenized
             // playback URL when the bucket is private.
-            SupabasePlaybackResolver.resolve(publicUrl)
+            val playbackUrl = SupabasePlaybackResolver.resolve(publicUrl)
+            onProgress(1f)
+            playbackUrl
+        }
+    }
+
+    /** Streams bytes to OkHttp while reporting real upload progress. */
+    private class ProgressRequestBody(
+        private val bytes: ByteArray,
+        private val contentType: MediaType?,
+        private val onProgress: (Float) -> Unit
+    ) : RequestBody() {
+        override fun contentType(): MediaType? = contentType
+        override fun contentLength(): Long = bytes.size.toLong()
+
+        override fun writeTo(sink: BufferedSink) {
+            val chunkSize = 64 * 1024
+            var offset = 0
+            while (offset < bytes.size) {
+                val end = minOf(offset + chunkSize, bytes.size)
+                sink.write(bytes, offset, end - offset)
+                offset = end
+                onProgress(offset.toFloat() / bytes.size.toFloat())
+            }
+            onProgress(1f)
         }
     }
 
