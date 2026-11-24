@@ -15,8 +15,11 @@ import java.util.concurrent.TimeUnit
 /**
  * Tiny PostgREST / Edge Functions client.
  *
- * Only the public anon key is bundled in the APK. Rows are protected by RLS,
- * and anything privileged goes through an Edge Function with the service role.
+ * Only the publishable key (or legacy anon key) is bundled in the APK. Rows are
+ * protected by RLS, and anything privileged goes through an Edge Function.
+ *
+ * New-style keys (sb_publishable_...) are not JWTs, so they go on `apikey` only.
+ * `Authorization: Bearer` is reserved for a real Supabase Auth user token.
  */
 object SupabaseClient {
 
@@ -40,6 +43,18 @@ object SupabaseClient {
         .writeTimeout(90, TimeUnit.SECONDS)
         .build()
 
+    /**
+     * Sends a real user JWT only. Publishable/secret keys are API keys, not JWTs;
+     * putting one in Authorization makes the gateway try (and fail) to parse it.
+     */
+    private fun applyAuth(builder: Request.Builder, accessToken: String?) {
+        val candidate = accessToken?.trim()?.takeIf { it.isNotBlank() }
+        // sb_publishable_/sb_secret_ are API keys, never JWTs. Legacy eyJ... keys
+        // still work as Bearer tokens, and real user JWTs must use Bearer.
+        val token = if (candidate == anonKey && anonKey.startsWith("sb_")) null else candidate
+        if (!token.isNullOrBlank()) builder.addHeader("Authorization", "Bearer $token")
+    }
+
     suspend fun rpc(
         name: String,
         payload: JSONObject = JSONObject(),
@@ -51,7 +66,7 @@ object SupabaseClient {
         val request = Request.Builder()
             .url("$url/rest/v1/rpc/$name")
             .addHeader("apikey", anonKey)
-            .addHeader("Authorization", "Bearer ${accessToken ?: anonKey}")
+            .also { applyAuth(it, accessToken) }
             .addHeader("Content-Type", "application/json")
             .addHeader("Prefer", "return=representation")
             .post(payload.toString().toRequestBody(JSON))
@@ -70,7 +85,7 @@ object SupabaseClient {
         val request = Request.Builder()
             .url("$url/rest/v1/$table$query")
             .addHeader("apikey", anonKey)
-            .addHeader("Authorization", "Bearer ${accessToken ?: anonKey}")
+            .also { applyAuth(it, accessToken) }
             .get()
             .build()
         runCatching {
@@ -93,7 +108,7 @@ object SupabaseClient {
         val request = Request.Builder()
             .url("$functionsUrl/$name")
             .addHeader("apikey", anonKey)
-            .addHeader("Authorization", "Bearer ${accessToken ?: anonKey}")
+            .also { applyAuth(it, accessToken) }
             .addHeader("Content-Type", "application/json")
             .post(payload.toString().toRequestBody(JSON))
             .build()

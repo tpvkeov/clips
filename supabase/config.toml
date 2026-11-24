@@ -1,0 +1,11 @@
+# Edge Functions are called by the app with a publishable API key on `apikey`.
+# Publishable keys are not JWTs, so the platform's legacy JWT check is disabled;
+# each function does its own work with a server-side secret key.
+[functions.upload-ticket]
+verify_jwt = false
+
+[functions.commit-video]
+verify_jwt = false
+
+[functions.download-ticket]
+verify_jwt = false
