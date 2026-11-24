@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   try {
     const keyId = Deno.env.get("B2_KEY_ID")!;
     const appKey = Deno.env.get("B2_APPLICATION_KEY")!;
-    const bucketName = Deno.env.get("B2_BUCKET_NAME") ?? "clips-videos";
+    const bucketName = Deno.env.get("B2_BUCKET_NAME") ?? "clips-videos-ithuzzzkhnbypgvmdugk";
 
     const body = await req.json();
     const prefix = String(body.prefix ?? body.fileKey ?? "clips_").trim();
