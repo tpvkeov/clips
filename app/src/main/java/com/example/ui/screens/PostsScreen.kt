@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -58,6 +59,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,6 +114,7 @@ fun PostsScreen(
         fallbackStyle: MediaVisualStyle?
     ) -> Unit,
     onScrollDelta: (Float) -> Unit,
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showComposerSheet by remember { mutableStateOf(false) }
@@ -120,6 +123,16 @@ fun PostsScreen(
     var showSavedSheet by remember { mutableStateOf(false) }
     var savedTab by remember { mutableStateOf(0) }
     val postListState = rememberLazyListState()
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val info = postListState.layoutInfo
+            info.totalItemsCount > 6 &&
+                (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 4
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
 
     LaunchedEffect(scrollToPostId) {
         val targetId = scrollToPostId ?: return@LaunchedEffect
@@ -439,11 +452,24 @@ private fun PostCardItem(
                     HighQualityAvatarView(preset = authorAvatar, size = 44.dp)
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = post.authorName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = post.authorName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (post.isAuthorVerified) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = "حساب موثّق",
+                                    tint = LocalCustomButtonColors.current.actionButtonsColor
+                                        ?: MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                         Text(
                             text = "${post.authorHandle} • ${post.timeAgo}",
                             style = MaterialTheme.typography.labelSmall,

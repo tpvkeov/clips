@@ -130,6 +130,11 @@ dependencies {
   implementation(libs.googleid)
   // FFmpeg powers video compression and automatic thumbnail generation on upload.
   implementation(libs.ffmpeg.kit.video)
+  // Media3 keeps the same on-screen player UI while caching playback bytes locally,
+  // so replaying a clip does not hit B2 again.
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.datasource)
+  implementation(libs.androidx.media3.database)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)

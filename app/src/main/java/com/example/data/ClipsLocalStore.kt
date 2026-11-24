@@ -195,7 +195,7 @@ class ClipsLocalStore(context: Context) {
     // Feature suggestion board (ideas + likes + comments).
     // ---------------------------------------------------------------------
 
-    /** Returns null when the board was never saved, so demo ideas can be seeded. */
+    /** Returns null when the board was never saved locally; remote ideas load from Supabase. */
     fun loadSuggestions(): List<FeatureSuggestion>? {
         val raw = preferences.getString(KEY_SUGGESTIONS, null) ?: return null
         val result = mutableListOf<FeatureSuggestion>()
@@ -273,6 +273,17 @@ class ClipsLocalStore(context: Context) {
         preferences.edit().putInt(KEY_LOGIN_ACCENT_ARGB, argb).apply()
     }
 
+    // ---------------------------------------------------------------------
+    // Creator blocks are device-local: no backend row, no fake moderation data.
+    // ---------------------------------------------------------------------
+
+    fun loadBlockedCreatorHandles(): Set<String> =
+        preferences.getStringSet(KEY_BLOCKED_CREATORS, emptySet())?.toSet().orEmpty()
+
+    fun saveBlockedCreatorHandles(handles: Set<String>) {
+        preferences.edit().putStringSet(KEY_BLOCKED_CREATORS, handles).apply()
+    }
+
     private companion object {
         const val KEY_SAVED_VIDEOS = "saved_video_ids"
         const val KEY_SAVED_VIDEO_SOURCES = "saved_video_sources"
@@ -287,5 +298,6 @@ class ClipsLocalStore(context: Context) {
         const val KEY_REPORTS = "reports"
         const val KEY_SUGGESTIONS = "feature_suggestions"
         const val KEY_LOGIN_ACCENT_ARGB = "login_accent_argb"
+        const val KEY_BLOCKED_CREATORS = "blocked_creators"
     }
 }

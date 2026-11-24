@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.download-ticket]
 verify_jwt = false
+
+[functions.add-comment]
+verify_jwt = false

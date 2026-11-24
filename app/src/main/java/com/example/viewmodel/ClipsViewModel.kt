@@ -10,11 +10,13 @@ import com.example.data.AuthSecurityStore
 import com.example.data.ClipsLocalStore
 import com.example.data.AppCatalog
 import com.example.data.LocalVideoCache
+import com.example.data.MediaPlaybackCache
 import com.example.data.DeviceIdentityCollector
 import com.example.data.ProfileAvatarState
 import com.example.data.ReelsFeedSelector
 import com.example.data.SupabaseClient
 import com.example.data.SupabaseContentRepository
+import com.example.data.SupabasePlaybackResolver
 import com.example.data.SupabaseUploader
 import com.example.data.VideoProcessingService
 import com.example.data.WatchProgress
@@ -95,6 +97,14 @@ data class ClipsUiState(
     val horizontalVideos: List<VideoItem> = emptyList(),
     val verticalClips: List<VideoItem> = emptyList(),
     val posts: List<PostItem> = emptyList(),
+    /** PostgREST cursors; null means there is no older page left. */
+    val feedNextCursor: String? = null,
+    val postsNextCursor: String? = null,
+    val isLoadingMore: Boolean = false,
+    /** Absent key = not loaded yet, null value = no older comments, string = next cursor. */
+    val commentNextCursors: Map<String, String?> = emptyMap(),
+    val isLoadingComments: Boolean = false,
+    val blockedCreatorHandles: Set<String> = emptySet(),
     val stories: List<UserStoryGroup> = emptyList(),
     val activeStoryGroupIndex: Int? = null,
     val showAddStorySheet: Boolean = false,
@@ -178,7 +188,8 @@ data class ClipsUiState(
                 followersCount = userProfile.followersCount,
                 followingCount = userProfile.followingCount,
                 totalLikesCount = userProfile.totalLikesCount,
-                useOwnBannerDrawable = true
+                useOwnBannerDrawable = true,
+                isVerified = userProfile.isVerified
             )
         }
         val creatorVideos = (horizontalVideos + verticalClips).filter { it.creatorHandle == handle }
@@ -206,7 +217,10 @@ data class ClipsUiState(
             followersCount = stats?.followersCount ?: "0",
             followingCount = stats?.followingCount ?: "0",
             totalLikesCount = realLikes.toString(),
-            useOwnBannerDrawable = false
+            useOwnBannerDrawable = false,
+            isVerified = stats?.isVerified == true ||
+                creatorVideos.any { it.isCreatorVerified } ||
+                creatorPosts.any { it.isAuthorVerified }
         )
     }
 }
@@ -327,6 +341,11 @@ class ClipsViewModel(
             _uiState.update { it.copy(reportEntries = savedReports) }
         }
 
+        localStore?.let { store ->
+            val blocked = store.loadBlockedCreatorHandles()
+            _uiState.update { it.copy(blockedCreatorHandles = blocked) }
+        }
+
         authRepository?.let { repository ->
             val securityStore = appContext?.let { AuthSecurityStore(it) }
             val device = appContext?.let { DeviceIdentityCollector.collect(it) }
@@ -386,6 +405,8 @@ class ClipsViewModel(
         // Real backend feed: every video, post, profile and suggestion comes
         // from Supabase. Only the user's own local, not-yet-synced media is
         // preserved across reloads.
+        SupabasePlaybackResolver.initialize(appContext)
+
         if (SupabaseClient.isConfigured) {
             viewModelScope.launch {
                 val savedIds = localStore?.loadSavedVideoIds().orEmpty()
@@ -408,22 +429,33 @@ class ClipsViewModel(
                         uri.startsWith("content://", ignoreCase = true)
                 } == true
 
-                val feed = SupabaseContentRepository.loadFeed().getOrNull()
-                val remotePosts = SupabaseContentRepository.loadPosts().getOrNull()
+                val feedPage = SupabaseContentRepository.loadFeedPage().getOrNull()
+                val postsPage = SupabaseContentRepository.loadPostsPage().getOrNull()
+                val feed = feedPage?.feed
+                val remotePosts = postsPage?.posts
                 val remoteSuggestions = SupabaseContentRepository.loadSuggestions().getOrNull()
                 val signedInUser = _uiState.value.auth.user
                 val myProfile = signedInUser?.uid?.takeIf { it.isNotBlank() }
                     ?.let { uid -> SupabaseContentRepository.loadMyProfile(uid).getOrNull() }
+                val blocked = _uiState.value.blockedCreatorHandles
+
+                fun videoAllowed(video: VideoItem): Boolean =
+                    video.creatorHandle !in blocked && !video.isMine
+
+                fun postAllowed(post: PostItem): Boolean =
+                    post.authorHandle !in blocked && !post.isMine
 
                 _uiState.update { state ->
                     state.copy(
-                        horizontalVideos = feed?.horizontal?.map(::restoreLocalState).orEmpty() +
+                        horizontalVideos = feed?.horizontal?.filter(::videoAllowed)?.map(::restoreLocalState).orEmpty() +
                             state.horizontalVideos.filter { it.isMine && isLocalOnly(it.mediaUriString) },
-                        verticalClips = feed?.vertical?.map(::restoreLocalState).orEmpty() +
+                        verticalClips = feed?.vertical?.filter(::videoAllowed)?.map(::restoreLocalState).orEmpty() +
                             state.verticalClips.filter { it.isMine && isLocalOnly(it.mediaUriString) },
-                        posts = remotePosts.orEmpty() +
+                        posts = remotePosts?.filter(::postAllowed).orEmpty() +
                             state.posts.filter { it.isMine && isLocalOnly(it.mediaUriString) },
                         suggestions = remoteSuggestions.orEmpty(),
+                        feedNextCursor = feedPage?.nextCursor,
+                        postsNextCursor = postsPage?.nextCursor,
                         userProfile = myProfile?.let { profile ->
                             state.userProfile.copy(
                                 name = profile.name,
@@ -436,7 +468,8 @@ class ClipsViewModel(
                                         .filter { it.creatorName.equals(profile.name, ignoreCase = true) }
                                         .sumOf { it.likesCount }
                                         .toString()
-                                } ?: profile.totalLikesCount
+                                } ?: profile.totalLikesCount,
+                                isVerified = profile.isVerified
                             )
                         } ?: state.userProfile.copy(
                             name = signedInUser?.displayName?.takeIf { it.isNotBlank() }
@@ -448,29 +481,69 @@ class ClipsViewModel(
                     )
                 }
 
-                val context = appContext ?: return@launch
-                val firstClips = feed?.vertical.orEmpty().take(10)
-                val remoteClipIdsByUrl = firstClips
-                    .mapNotNull { clip -> clip.mediaUriString?.takeIf { it.isNotBlank() }?.to(clip.id) }
-                    .groupBy({ it.first }, { it.second })
-                    .mapValues { entry -> entry.value.toSet() }
-                val remoteUrls = remoteClipIdsByUrl.keys.toList()
-                if (remoteUrls.isEmpty()) return@launch
-
-                LocalVideoCache.prefetch(context, remoteUrls) { url, localUri ->
-                    val ids = remoteClipIdsByUrl[url].orEmpty()
-                    if (ids.isNotEmpty()) {
-                        _uiState.update { state ->
-                            state.copy(
-                                verticalClips = state.verticalClips.map { clip ->
-                                    if (clip.id in ids && clip.mediaUriString == url) {
-                                        clip.copy(mediaUriString = localUri)
-                                    } else clip
-                                }
-                            )
+                // Media3 keeps already-watched bytes on the device; prefetch only
+                // the next few clips instead of downloading the whole feed twice.
+                val context = appContext
+                if (context != null) {
+                    val nextClipUrls = feed?.vertical.orEmpty().take(6)
+                        .mapNotNull { clip ->
+                            clip.mediaUriString?.takeIf { it.startsWith("http", ignoreCase = true) }
                         }
-                    }
+                    if (nextClipUrls.isNotEmpty()) MediaPlaybackCache.prefetch(context, nextClipUrls)
                 }
+            }
+        }
+    }
+
+    /** Appends the next page only when the user actually scrolls near the end. */
+    fun loadMoreContent() {
+        if (!SupabaseClient.isConfigured) return
+        val snapshot = _uiState.value
+        if (snapshot.isLoadingMore || (snapshot.feedNextCursor == null && snapshot.postsNextCursor == null)) return
+        _uiState.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            val feedPage = snapshot.feedNextCursor?.let { cursor ->
+                SupabaseContentRepository.loadFeedPage(before = cursor).getOrNull()
+            }
+            val postsPage = snapshot.postsNextCursor?.let { cursor ->
+                SupabaseContentRepository.loadPostsPage(before = cursor).getOrNull()
+            }
+            val savedIds = localStore?.loadSavedVideoIds().orEmpty()
+            val savedSources = localStore?.loadSavedVideoSources().orEmpty()
+            val blocked = snapshot.blockedCreatorHandles
+
+            fun restoreLocalState(video: VideoItem): VideoItem {
+                if (video.id !in savedIds) return video
+                val localUri = appContext?.let { LocalVideoCache.resolveSaved(it, video.id) }
+                    ?: savedSources[video.id]
+                return if (localUri.isNullOrBlank()) {
+                    video.copy(isSaved = true)
+                } else {
+                    video.copy(isSaved = true, mediaUriString = localUri)
+                }
+            }
+
+            _uiState.update { current ->
+                val existingVideoIds = (current.horizontalVideos + current.verticalClips)
+                    .map { it.id }.toSet()
+                val newVideos = (feedPage?.feed?.horizontal.orEmpty() + feedPage?.feed?.vertical.orEmpty())
+                    .filter { it.id !in existingVideoIds }
+                    .filter { it.creatorHandle !in blocked }
+                    .map(::restoreLocalState)
+                val existingPostIds = current.posts.map { it.id }.toSet()
+                val newPosts = postsPage?.posts.orEmpty()
+                    .filter { it.id !in existingPostIds }
+                    .filter { it.authorHandle !in blocked }
+                current.copy(
+                    horizontalVideos = current.horizontalVideos +
+                        newVideos.filter { it.orientation == VideoOrientation.HORIZONTAL },
+                    verticalClips = current.verticalClips +
+                        newVideos.filter { it.orientation == VideoOrientation.VERTICAL },
+                    posts = current.posts + newPosts,
+                    feedNextCursor = feedPage?.nextCursor ?: current.feedNextCursor,
+                    postsNextCursor = postsPage?.nextCursor ?: current.postsNextCursor,
+                    isLoadingMore = false
+                )
             }
         }
     }
@@ -690,6 +763,24 @@ class ClipsViewModel(
         }
     }
 
+    /** Device-local block: hides this creator's real content without inventing a report row. */
+    fun blockCreator(handle: String) {
+        val normalized = handle.trim()
+        if (normalized.isBlank() || normalized == _uiState.value.userProfile.handle) return
+        val updated = _uiState.value.blockedCreatorHandles + normalized
+        localStore?.saveBlockedCreatorHandles(updated)
+        _uiState.update { state ->
+            state.copy(
+                blockedCreatorHandles = updated,
+                horizontalVideos = state.horizontalVideos.filter { it.creatorHandle != normalized },
+                verticalClips = state.verticalClips.filter { it.creatorHandle != normalized },
+                posts = state.posts.filter { it.authorHandle != normalized },
+                activeCreatorHandle = if (state.activeCreatorHandle == normalized) null else state.activeCreatorHandle,
+                feedbackMessage = "تم حظر هذا الحساب على هذا الجهاز"
+            )
+        }
+    }
+
     fun toggleClipsLayoutMode() {
         _uiState.update { state ->
             // Only the two full-screen reel modes remain; the cards-shelf mode was removed.
@@ -881,11 +972,74 @@ class ClipsViewModel(
 
     fun openComments(target: CommentsTarget) {
         _uiState.update { it.copy(commentsTarget = target) }
+        loadCommentsPage(target, refresh = true)
     }
 
     fun closeComments() {
         _uiState.update { it.copy(commentsTarget = null) }
     }
+
+    private fun commentsKey(target: CommentsTarget): String = when (target) {
+        is CommentsTarget.Video -> "video:${target.videoId}"
+        is CommentsTarget.Post -> "post:${target.postId}"
+    }
+
+    private fun commentsFor(state: ClipsUiState, target: CommentsTarget): List<CommentItem> = when (target) {
+        is CommentsTarget.Video -> (state.horizontalVideos + state.verticalClips)
+            .firstOrNull { it.id == target.videoId }?.comments.orEmpty()
+        is CommentsTarget.Post -> state.posts.firstOrNull { it.id == target.postId }?.comments.orEmpty()
+    }
+
+    private fun ClipsUiState.withComments(
+        target: CommentsTarget,
+        comments: List<CommentItem>
+    ): ClipsUiState = when (target) {
+        is CommentsTarget.Video -> copy(
+            horizontalVideos = horizontalVideos.map {
+                if (it.id == target.videoId) it.copy(comments = comments) else it
+            },
+            verticalClips = verticalClips.map {
+                if (it.id == target.videoId) it.copy(comments = comments) else it
+            }
+        )
+        is CommentsTarget.Post -> copy(
+            posts = posts.map {
+                if (it.id == target.postId) it.copy(comments = comments) else it
+            }
+        )
+    }
+
+    private fun ClipsUiState.withAddedComment(
+        target: CommentsTarget,
+        comment: CommentItem
+    ): ClipsUiState = withComments(target, listOf(comment) + commentsFor(this, target))
+
+    /** Loads real comments; no placeholder rows are ever inserted locally. */
+    private fun loadCommentsPage(target: CommentsTarget, refresh: Boolean) {
+        if (!SupabaseClient.isConfigured || _uiState.value.isLoadingComments) return
+        val key = commentsKey(target)
+        val cursors = _uiState.value.commentNextCursors
+        if (!refresh) {
+            if (!cursors.containsKey(key)) return
+            if (cursors[key] == null) return // already reached the last page
+        }
+        _uiState.update { it.copy(isLoadingComments = true) }
+        val before = if (refresh) null else cursors[key]
+        viewModelScope.launch {
+            val page = SupabaseContentRepository.loadComments(target, before = before).getOrNull()
+            _uiState.update { state ->
+                val existing = if (refresh) emptyList() else commentsFor(state, target)
+                val knownIds = existing.map { it.id }.toSet()
+                val merged = existing + page?.comments.orEmpty().filter { it.id !in knownIds }
+                state.withComments(target, merged).copy(
+                    commentNextCursors = state.commentNextCursors + (key to page?.nextCursor),
+                    isLoadingComments = false
+                )
+            }
+        }
+    }
+
+    fun loadMoreComments(target: CommentsTarget) = loadCommentsPage(target, refresh = false)
 
     fun consumeFeedback() {
         _uiState.update { it.copy(feedbackMessage = null) }
@@ -1077,29 +1231,42 @@ class ClipsViewModel(
         val cleanText = text.trim()
         if (cleanText.isEmpty()) return
         if (!requireEngagementAuth(PendingEngagement.AddComment(target, cleanText))) return
+        val authUser = _uiState.value.auth.user
+        val authorKey = authUser?.uid?.takeIf { it.isNotBlank() }
+        if (authorKey == null) {
+            _uiState.update { it.copy(feedbackMessage = "تعذر نشر التعليق، سجّل الدخول مرة أخرى") }
+            return
+        }
         val profile = _uiState.value.userProfile
-        val newComment = CommentItem(
-            id = "cmt_${UUID.randomUUID()}",
-            authorName = profile.name,
-            avatarPresetId = profile.avatarPresetId,
-            text = cleanText,
-            timeAgo = "الآن"
-        )
-        _uiState.update { state ->
-            when (target) {
-                is CommentsTarget.Video -> state.copy(
-                    horizontalVideos = state.horizontalVideos.map {
-                        if (it.id == target.videoId) it.copy(comments = listOf(newComment) + it.comments) else it
-                    },
-                    verticalClips = state.verticalClips.map {
-                        if (it.id == target.videoId) it.copy(comments = listOf(newComment) + it.comments) else it
-                    }
+        val authorName = profile.name.takeIf { it.isNotBlank() }
+            ?: authUser.displayName.takeIf { it.isNotBlank() }
+            ?: authUser.email.substringBefore('@')
+        _uiState.update { it.copy(isLoadingComments = true) }
+        viewModelScope.launch {
+            val result = SupabaseContentRepository.addRemoteComment(
+                target = target,
+                authorKey = authorKey,
+                authorName = authorName,
+                content = cleanText
+            )
+            result.onSuccess { id ->
+                val comment = CommentItem(
+                    id = id,
+                    authorName = authorName,
+                    avatarPresetId = profile.avatarPresetId,
+                    text = cleanText,
+                    timeAgo = "الآن"
                 )
-                is CommentsTarget.Post -> state.copy(
-                    posts = state.posts.map {
-                        if (it.id == target.postId) it.copy(comments = listOf(newComment) + it.comments) else it
-                    }
-                )
+                _uiState.update { state ->
+                    state.withAddedComment(target, comment).copy(isLoadingComments = false)
+                }
+            }.onFailure {
+                _uiState.update { state ->
+                    state.copy(
+                        isLoadingComments = false,
+                        feedbackMessage = "تعذر إرسال التعليق، حاول مرة أخرى"
+                    )
+                }
             }
         }
     }

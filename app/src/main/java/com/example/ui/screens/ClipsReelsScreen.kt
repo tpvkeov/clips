@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -122,6 +123,7 @@ fun ClipsReelsScreen(
     onOpenComments: (String) -> Unit,
     onShare: (String) -> Unit,
     onReport: (String) -> Unit,
+    onBlock: (String) -> Unit,
     onOpenCreatorProfile: (String) -> Unit,
     onBottomBarVisibilityChange: (Boolean) -> Unit = {},
     isBottomBarVisible: Boolean = true,
@@ -215,6 +217,7 @@ fun ClipsReelsScreen(
                             onOpenComments = { onOpenComments(clip.id) },
                             onShare = { onShare(clip.id) },
                             onReport = { onReport(clip.id) },
+                            onBlock = { onBlock(clip.creatorHandle) },
                             onOpenCreatorProfile = { onOpenCreatorProfile(clip.creatorHandle) },
                             onToggleLayoutMode = onToggleLayoutMode,
                             onSelectLayoutMode = onSelectLayoutMode
@@ -346,6 +349,7 @@ private fun ReelPageItem(
     onOpenComments: () -> Unit,
     onShare: () -> Unit,
     onReport: () -> Unit,
+    onBlock: () -> Unit,
     onOpenCreatorProfile: () -> Unit,
     onToggleLayoutMode: () -> Unit,
     onSelectLayoutMode: (ClipsLayoutMode) -> Unit
@@ -658,14 +662,26 @@ private fun ReelPageItem(
                                         .clickable(onClick = onOpenCreatorProfile)
                                         .padding(horizontal = 4.dp, vertical = 2.dp)
                                 ) {
-                                    Text(
-                                        text = clip.creatorName,
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = clip.creatorName,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (clip.isCreatorVerified) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Filled.Verified,
+                                                contentDescription = "حساب موثّق",
+                                                tint = secondaryAccent,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = clip.creatorHandle,
                                         color = Color.White.copy(alpha = 0.78f),
@@ -781,6 +797,13 @@ private fun ReelPageItem(
                                 onClick = {
                                     showMoreMenu = false
                                     onReport()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("حظر هذا الحساب على الجهاز") },
+                                onClick = {
+                                    showMoreMenu = false
+                                    onBlock()
                                 }
                             )
                             DropdownMenuItem(

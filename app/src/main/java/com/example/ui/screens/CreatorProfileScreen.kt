@@ -38,10 +38,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -95,6 +97,7 @@ fun CreatorProfileScreen(
     onOpenVideo: (String) -> Unit,
     onOpenClip: (String) -> Unit,
     onReportAccount: () -> Unit,
+    onBlockAccount: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -238,6 +241,25 @@ fun CreatorProfileScreen(
                                         )
                                     }
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.56f),
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .testTag("creator_block_button")
+                                        .clickable(onClick = onBlockAccount)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Block,
+                                            contentDescription = "حظر الحساب على هذا الجهاز",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -276,15 +298,27 @@ fun CreatorProfileScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = creator.name,
-                                        fontSize = 23.sp,
-                                        lineHeight = 29.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (isDark) Color.White else MaterialTheme.colorScheme.onBackground,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = creator.name,
+                                            fontSize = 23.sp,
+                                            lineHeight = 29.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (isDark) Color.White else MaterialTheme.colorScheme.onBackground,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (creator.isVerified) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Filled.Verified,
+                                                contentDescription = "حساب موثّق",
+                                                tint = secondaryAccent,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = creator.handle,
                                         style = MaterialTheme.typography.labelMedium,

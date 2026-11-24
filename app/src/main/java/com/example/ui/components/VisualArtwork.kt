@@ -82,8 +82,12 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.media.MediaMetadataRetriever
-import android.media.MediaPlayer
 import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.example.data.MediaPlaybackCache
 import android.os.Build
 import android.view.Surface
 import android.view.TextureView
@@ -538,7 +542,7 @@ fun MediaSceneArtwork(
 
                     if (keepPrepared || isPlaying) {
                         key(mediaUriString) {
-                            var activePlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+                            var activePlayer by remember { mutableStateOf<ExoPlayer?>(null) }
                             var isPrepared by remember { mutableStateOf(false) }
                             var isVideoRendering by remember { mutableStateOf(false) }
                             var videoSize by remember { mutableStateOf(0 to 0) }
@@ -548,34 +552,19 @@ fun MediaSceneArtwork(
                             val currentSpeed by rememberUpdatedState(playbackSpeed)
                             val currentFillScreen by rememberUpdatedState(fillScreen)
 
-                            LaunchedEffect(isPlaying, isPrepared, activePlayer) {
-                                val mp = activePlayer ?: return@LaunchedEffect
-                                if (!isPrepared) return@LaunchedEffect
-                                runCatching {
-                                    if (isPlaying) {
-                                        if (!mp.isPlaying) mp.start()
-                                        isVideoRendering = true
-                                    } else {
-                                        if (mp.isPlaying) mp.pause()
-                                    }
-                                }
+                            LaunchedEffect(isPlaying, activePlayer) {
+                                val player = activePlayer ?: return@LaunchedEffect
+                                player.playWhenReady = isPlaying
+                                if (isPlaying && player.playbackState != Player.STATE_READY) player.play()
                             }
 
-                            LaunchedEffect(isMuted, isPrepared, activePlayer) {
-                                val mp = activePlayer ?: return@LaunchedEffect
-                                if (!isPrepared) return@LaunchedEffect
-                                val vol = if (isMuted) 0f else 1f
-                                runCatching { mp.setVolume(vol, vol) }
+                            LaunchedEffect(isMuted, activePlayer) {
+                                val player = activePlayer ?: return@LaunchedEffect
+                                player.volume = if (isMuted) 0f else 1f
                             }
 
-                            LaunchedEffect(playbackSpeed, isPrepared, isPlaying, activePlayer) {
-                                val mp = activePlayer ?: return@LaunchedEffect
-                                if (!isPrepared || !isPlaying) return@LaunchedEffect
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    runCatching {
-                                        mp.playbackParams = mp.playbackParams.setSpeed(playbackSpeed)
-                                    }
-                                }
+                            LaunchedEffect(playbackSpeed, activePlayer) {
+                                activePlayer?.setPlaybackSpeed(playbackSpeed)
                             }
 
                             val lifecycleOwner = LocalLifecycleOwner.current
@@ -622,72 +611,57 @@ fun MediaSceneArtwork(
                                                 isVideoRendering = false
                                                 val surf = Surface(surfaceTexture)
                                                 attachedSurface = surf
-                                                val mp = MediaPlayer()
-                                                activePlayer = mp
-                                                runCatching {
-                                                    mp.setSurface(surf)
-                                                    // Always fit the whole frame (letterbox instead of
-                                                    // cropping a zoomed-in part) in every player.
-                                                    mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
-                                                    mp.setDataSource(ctx, Uri.parse(mediaUriString))
-                                                    mp.isLooping = true
-                                                    mp.setOnVideoSizeChangedListener { _, vw, vh ->
-                                                        videoSize = vw to vh
-                                                        applyTextureScaleTransform(
-                                                            this@apply,
-                                                            vw,
-                                                            vh,
-                                                            currentFillScreen
+                                                val player = ExoPlayer.Builder(ctx)
+                                                    .setMediaSourceFactory(
+                                                        DefaultMediaSourceFactory(
+                                                            MediaPlaybackCache.dataSourceFactory(ctx)
                                                         )
-                                                    }
-                                                    mp.setOnInfoListener { _, what, _ ->
-                                                        if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                                                    )
+                                                    .build()
+                                                activePlayer = player
+                                                runCatching {
+                                                    player.setVideoSurface(surf)
+                                                    // Keep the same fit-inside-frame behaviour as before.
+                                                    player.repeatMode = Player.REPEAT_MODE_ONE
+                                                    player.volume = if (currentIsMuted) 0f else 1f
+                                                    if (currentSpeed != 1f) player.setPlaybackSpeed(currentSpeed)
+                                                    player.addListener(object : Player.Listener {
+                                                        override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
+                                                            val vw = size.width.coerceAtLeast(1)
+                                                            val vh = size.height.coerceAtLeast(1)
+                                                            videoSize = vw to vh
+                                                            applyTextureScaleTransform(
+                                                                this@apply,
+                                                                vw,
+                                                                vh,
+                                                                currentFillScreen
+                                                            )
+                                                        }
+
+                                                        override fun onRenderedFirstFrame() {
                                                             isVideoRendering = true
                                                             alpha = 1f
                                                         }
-                                                        false
-                                                    }
-                                                    mp.setOnPreparedListener { preparedMp ->
-                                                        // The composable can be disposed while prepareAsync() is
-                                                        // in flight. Ignore callbacks from a player we no longer own.
-                                                        if (activePlayer !== preparedMp) return@setOnPreparedListener
-                                                        runCatching {
-                                                            val width = preparedMp.videoWidth
-                                                            val height = preparedMp.videoHeight
-                                                            videoSize = width to height
-                                                            applyTextureScaleTransform(
-                                                                this@apply,
-                                                                width,
-                                                                height,
-                                                                currentFillScreen
-                                                            )
-                                                            val vol = if (currentIsMuted) 0f else 1f
-                                                            preparedMp.setVolume(vol, vol)
-                                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && currentSpeed != 1f) {
-                                                                preparedMp.playbackParams =
-                                                                    preparedMp.playbackParams.setSpeed(currentSpeed)
-                                                            }
-                                                            isPrepared = true
-                                                            if (currentIsPlaying) {
-                                                                preparedMp.start()
-                                                                isVideoRendering = true
-                                                                alpha = 1f
-                                                            }
-                                                        }.onFailure {
+
+                                                        override fun onPlaybackStateChanged(playbackState: Int) {
+                                                            isPrepared = playbackState == Player.STATE_READY
+                                                        }
+
+                                                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                                                             isPrepared = false
                                                             isVideoRendering = false
                                                             alpha = 0f
                                                         }
-                                                    }
-                                                    mp.setOnErrorListener { errMp, _, _ ->
-                                                        if (activePlayer === errMp) activePlayer = null
-                                                        isPrepared = false
-                                                        isVideoRendering = false
-                                                        alpha = 0f
-                                                        runCatching { errMp.release() }
-                                                        true
-                                                    }
-                                                    mp.prepareAsync()
+                                                    })
+                                                    player.setMediaItem(MediaItem.fromUri(mediaUriString))
+                                                    player.playWhenReady = currentIsPlaying
+                                                    player.prepare()
+                                                }.onFailure {
+                                                    isPrepared = false
+                                                    isVideoRendering = false
+                                                    alpha = 0f
+                                                    runCatching { player.release() }
+                                                    if (activePlayer === player) activePlayer = null
                                                 }
                                             }
 

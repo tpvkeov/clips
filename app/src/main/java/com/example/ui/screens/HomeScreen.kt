@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.Button
@@ -54,6 +55,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -116,10 +119,21 @@ fun HomeScreen(
     isGuest: Boolean = false,
     onOpenAuth: () -> Unit = {},
     onScrollDelta: (Float) -> Unit,
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var searchExpanded by remember { mutableStateOf(false) }
     val mainListState = rememberLazyListState()
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val info = mainListState.layoutInfo
+            info.totalItemsCount > 6 &&
+                (info.visibleItemsInfo.lastOrNull()?.index ?: 0) >= info.totalItemsCount - 4
+        }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) onLoadMore()
+    }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -581,18 +595,30 @@ private fun HorizontalVideoCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${video.creatorName} • ${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .testTag("home_video_creator_name_${video.id}")
-                        .clickable(onClick = onOpenCreatorProfile)
-                        .padding(vertical = 2.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${video.creatorName} • ${formatCompactCount(video.viewsCount)} مشاهدة • ${video.timeAgo}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .testTag("home_video_creator_name_${video.id}")
+                            .clickable(onClick = onOpenCreatorProfile)
+                            .padding(vertical = 2.dp)
+                            .weight(1f, fill = false)
+                    )
+                    if (video.isCreatorVerified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Filled.Verified,
+                            contentDescription = "حساب موثّق",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.width(4.dp))

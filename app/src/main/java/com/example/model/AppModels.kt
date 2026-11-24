@@ -109,6 +109,7 @@ data class VideoItem(
     val mediaUriString: String? = null,
     val avatarOverlayId: String? = null,
     val isMine: Boolean = false,
+    val isCreatorVerified: Boolean = false,
     val musicTitle: String = "صوت أصلي • clips",
     val mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 )
@@ -131,6 +132,7 @@ data class PostItem(
     val comments: List<CommentItem> = emptyList(),
     val isMine: Boolean = false,
     val isSaved: Boolean = false,
+    val isAuthorVerified: Boolean = false,
     val mediaInfo: ProcessedMediaInfo = ProcessedMediaInfo()
 )
 
@@ -146,7 +148,8 @@ data class UserProfile(
     val avatarImageUri: String? = null,
     val avatarImageZoom: Float = 1f,
     val avatarImageOffsetX: Float = 0f,
-    val avatarImageOffsetY: Float = 0f
+    val avatarImageOffsetY: Float = 0f,
+    val isVerified: Boolean = false
 )
 
 data class CreatorChannelInfo(
@@ -158,7 +161,8 @@ data class CreatorChannelInfo(
     val followersCount: String,
     val followingCount: String,
     val totalLikesCount: String,
-    val useOwnBannerDrawable: Boolean = false
+    val useOwnBannerDrawable: Boolean = false,
+    val isVerified: Boolean = false
 )
 
 data class StorySlide(

@@ -1,6 +1,8 @@
 package com.example
 
+import android.app.PictureInPictureParams
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -83,6 +85,22 @@ import com.example.viewmodel.ClipsViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    /** Set from Compose so leaving the app during playback can enter system PiP. */
+    private val playbackActive = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun setPlaybackActive(active: Boolean) {
+        playbackActive.set(active)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // No new visible control: PiP is offered only when the user backgrounds
+        // an already-playing clip/player, using the system's own gesture.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playbackActive.get()) {
+            runCatching { enterPictureInPictureMode(PictureInPictureParams.Builder().build()) }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -126,6 +144,15 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // System-triggered PiP: no new button, and the clean-focus control stays as is.
+    DisposableEffect(state.currentTab, state.activePlayerVideoId) {
+        val activity = activityContext as? MainActivity
+        activity?.setPlaybackActive(
+            state.currentTab == MainTab.CLIPS || state.activePlayerVideoId != null
+        )
+        onDispose { activity?.setPlaybackActive(false) }
     }
 
     var pendingPostScrollId by remember { mutableStateOf<String?>(null) }
@@ -253,7 +280,10 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onOpenSuggestions = viewModel::openSuggestions,
                             isGuest = state.auth.isGuest,
                             onOpenAuth = { viewModel.openAuthScreen() },
-                            onScrollDelta = viewModel::onScrollDelta
+                            onScrollDelta = viewModel::onScrollDelta,
+                            onLoadMore = if (state.feedNextCursor != null) {
+                                { viewModel.loadMoreContent() }
+                            } else { {} }
                         )
 
                         MainTab.CLIPS -> key(state.clipsSessionToken) {
@@ -278,6 +308,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                                 },
                                 onShare = viewModel::shareVideo,
                                 onReport = viewModel::reportVideo,
+                                onBlock = viewModel::blockCreator,
                                 onOpenCreatorProfile = viewModel::openCreatorProfile,
                                 onBottomBarVisibilityChange = viewModel::setBottomBarVisible,
                                 isBottomBarVisible = state.isBottomBarVisible
@@ -315,7 +346,10 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             onOpenLinkedVideo = viewModel::openVideoPlayer,
                             onOpenCreatorProfile = viewModel::openCreatorProfile,
                             onPublishPost = viewModel::publishFromPostsTab,
-                            onScrollDelta = viewModel::onScrollDelta
+                            onScrollDelta = viewModel::onScrollDelta,
+                            onLoadMore = if (state.postsNextCursor != null) {
+                                { viewModel.loadMoreContent() }
+                            } else { {} }
                         )
 
                         MainTab.PROFILE -> ProfileScreen(
@@ -373,6 +407,7 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                             viewModel.openClipInReels(clipId)
                         },
                         onReportAccount = { viewModel.reportAccount(handle) },
+                        onBlockAccount = { viewModel.blockCreator(handle) },
                         onBack = viewModel::closeCreatorProfile
                     )
                 }
