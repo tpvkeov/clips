@@ -46,11 +46,12 @@ object SupabaseContentRepository {
         Feed(horizontal = horizontal, vertical = vertical)
     }
 
-    private fun JSONObject.toVideoItem(profiles: Map<String, JSONObject>): VideoItem {
+    private suspend fun JSONObject.toVideoItem(profiles: Map<String, JSONObject>): VideoItem {
         val profile = optString("user_id").takeIf { it.isNotBlank() }?.let { profiles[it] }
         val name = profile?.optString("full_name")?.takeIf { it.isNotBlank() } ?: "مستخدم clips"
         val avatarUrl = profile?.optString("avatar_url")?.takeIf { it != "null" && it.isNotBlank() }
-        val mediaUrl = optString("video_url").takeIf { it != "null" && it.isNotBlank() }
+        val rawUrl = optString("video_url").takeIf { it != "null" && it.isNotBlank() }
+        val mediaUrl = rawUrl?.let { SupabasePlaybackResolver.resolve(it) }
         val vertical = optBoolean("is_vertical")
         val avatarId = if (avatarUrl != null) {
             DemoDataFactory.CUSTOM_AVATAR_ID

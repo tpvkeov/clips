@@ -93,7 +93,9 @@ object SupabaseUploader {
                 throw IOException(commit.optString("message", "تعذر حفظ الفيديو في قاعدة البيانات"))
             }
 
-            publicUrl
+            // The database keeps the plain B2 URL; the app receives a tokenized
+            // playback URL when the bucket is private.
+            SupabasePlaybackResolver.resolve(publicUrl)
         }
     }
 
