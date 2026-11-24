@@ -41,6 +41,28 @@ class ClipsLocalStore(context: Context) {
         preferences.edit().putStringSet(KEY_SAVED_VIDEOS, ids).apply()
     }
 
+    /** Original playback URL for each saved video, so unsaving can restore it. */
+    fun loadSavedVideoSources(): Map<String, String> {
+        val raw = preferences.getString(KEY_SAVED_VIDEO_SOURCES, "{}").orEmpty()
+        val result = mutableMapOf<String, String>()
+        runCatching {
+            val json = JSONObject(raw)
+            json.keys().forEach { key ->
+                val value = json.optString(key)
+                if (value.isNotBlank()) result[key] = value
+            }
+        }
+        return result
+    }
+
+    fun saveSavedVideoSources(sources: Map<String, String>) {
+        val json = JSONObject()
+        sources.forEach { (id, uri) ->
+            if (uri.isNotBlank()) json.put(id, uri)
+        }
+        preferences.edit().putString(KEY_SAVED_VIDEO_SOURCES, json.toString()).apply()
+    }
+
     fun loadSavedPostIds(): Set<String> =
         preferences.getStringSet(KEY_SAVED_POSTS, emptySet())?.toSet().orEmpty()
 
@@ -253,6 +275,7 @@ class ClipsLocalStore(context: Context) {
 
     private companion object {
         const val KEY_SAVED_VIDEOS = "saved_video_ids"
+        const val KEY_SAVED_VIDEO_SOURCES = "saved_video_sources"
         const val KEY_SAVED_POSTS = "saved_post_ids"
         const val KEY_WATCH_PROGRESS = "watch_progress"
         const val KEY_REELS_ACCIDENTAL_EXIT = "reels_accidental_exit"

@@ -35,6 +35,17 @@ class ExampleUnitTest {
   }
 
   @Test
+  fun testGuestCanSaveVideoWithoutLogin() {
+    val viewModel = ClipsViewModel()
+    val clip = viewModel.uiState.value.verticalClips.first { !it.isSaved }
+
+    assertFalse(viewModel.uiState.value.auth.isLoggedIn)
+    viewModel.toggleSaveVideo(clip.id)
+
+    assertTrue(viewModel.uiState.value.verticalClips.first { it.id == clip.id }.isSaved)
+  }
+
+  @Test
   fun testLoginSwatchesMapToFullAppThemes() {
     assertEquals(
       AppThemeAccent.EMERALD_GREEN,

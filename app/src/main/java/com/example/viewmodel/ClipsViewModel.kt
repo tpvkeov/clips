@@ -51,6 +51,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -252,6 +254,9 @@ class ClipsViewModel(
     /** Remembered so a guest can finish signing in and the blocked action is replayed. */
     private var pendingEngagement: PendingEngagement? = null
 
+    /** Original playback URLs of locally saved clips, restored when unsaved. */
+    private val savedVideoSources = mutableMapOf<String, String>()
+
     private sealed interface PendingEngagement {
         data class LikeVideo(val videoId: String) : PendingEngagement
         data class LikePost(val postId: String) : PendingEngagement
@@ -273,7 +278,11 @@ class ClipsViewModel(
 
         localStore?.let { store ->
             val savedVideoIds = store.loadSavedVideoIds()
+            savedVideoSources.putAll(store.loadSavedVideoSources())
             val savedPostIds = store.loadSavedPostIds()
+            val savedLocalUri: (String) -> String? = { id ->
+                appContext?.let { DemoVideoCache.resolveSaved(it, id) }
+            }
             val verticalClipIds = _uiState.value.verticalClips
                 .filter { it.orientation == VideoOrientation.VERTICAL }
                 .map { it.id }
@@ -293,11 +302,23 @@ class ClipsViewModel(
 
             _uiState.update { state ->
                 state.copy(
-                    horizontalVideos = state.horizontalVideos.map {
-                        it.copy(isSaved = it.id in savedVideoIds)
+                    horizontalVideos = state.horizontalVideos.map { video ->
+                        if (video.id in savedVideoIds) {
+                            val localUri = savedLocalUri(video.id)
+                            video.copy(
+                                isSaved = true,
+                                mediaUriString = localUri ?: video.mediaUriString
+                            )
+                        } else video
                     },
-                    verticalClips = state.verticalClips.map {
-                        it.copy(isSaved = it.id in savedVideoIds)
+                    verticalClips = state.verticalClips.map { clip ->
+                        if (clip.id in savedVideoIds) {
+                            val localUri = savedLocalUri(clip.id)
+                            clip.copy(
+                                isSaved = true,
+                                mediaUriString = localUri ?: clip.mediaUriString
+                            )
+                        } else clip
                     },
                     posts = state.posts.map {
                         it.copy(isSaved = it.id in savedPostIds)
@@ -363,23 +384,29 @@ class ClipsViewModel(
             if (lockedUntil > System.currentTimeMillis()) startAuthLockTicker(lockedUntil)
         }
 
-        // Cache the first demo clips once, then swap their URIs to local files.
-        // If a download fails, resolve() keeps the original URL as a fallback.
+        // Download the first feed clips one by one and switch each clip to its
+        // local file the moment it finishes, so playback starts without waiting
+        // for the whole list. A failed download leaves the HTTPS URL as fallback.
         appContext?.let { context ->
+            val clipIdsByUrl = DemoDataFactory.initialVerticalClips
+                .mapIndexed { index, clip -> DemoDataFactory.demoClipVideoUrls.getOrNull(index) to clip.id }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { entry -> entry.value.toSet() }
+
             viewModelScope.launch {
-                DemoVideoCache.prefetch(context, DemoDataFactory.demoClipVideoUrls)
-                _uiState.update { state ->
-                    state.copy(
-                        verticalClips = state.verticalClips.map { clip ->
-                            val uri = clip.mediaUriString
-                            if (uri == null || !uri.startsWith("http", ignoreCase = true)) {
-                                clip
-                            } else {
-                                val local = DemoVideoCache.resolve(context, uri)
-                                if (local == uri) clip else clip.copy(mediaUriString = local)
-                            }
+                DemoVideoCache.prefetch(context, DemoDataFactory.demoClipVideoUrls) { url, localUri ->
+                    val ids = clipIdsByUrl[url].orEmpty()
+                    if (ids.isNotEmpty()) {
+                        _uiState.update { state ->
+                            state.copy(
+                                verticalClips = state.verticalClips.map { clip ->
+                                    if (clip.id in ids && clip.mediaUriString == url) {
+                                        clip.copy(mediaUriString = localUri)
+                                    } else clip
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -826,17 +853,21 @@ class ClipsViewModel(
     }
 
     fun toggleSaveVideo(videoId: String) {
+        val isGuestSave = !isSignedIn()
         var nowSaved = false
+        var sourceUri: String? = null
         _uiState.update { state ->
             val updatedHorizontal = state.horizontalVideos.map { video ->
                 if (video.id == videoId) {
                     nowSaved = !video.isSaved
+                    sourceUri = video.mediaUriString
                     video.copy(isSaved = nowSaved)
                 } else video
             }
             val updatedVertical = state.verticalClips.map { clip ->
                 if (clip.id == videoId) {
                     nowSaved = !clip.isSaved
+                    sourceUri = clip.mediaUriString
                     clip.copy(isSaved = nowSaved)
                 } else clip
             }
@@ -851,8 +882,64 @@ class ClipsViewModel(
                     id = nextEventId,
                     isSaving = nowSaved
                 ),
-                feedbackMessage = null
+                feedbackMessage = if (isGuestSave && nowSaved) "تم الحفظ على الهاتف فقط" else null
             )
+        }
+
+        if (!nowSaved) {
+            val original = savedVideoSources.remove(videoId)
+            localStore?.saveSavedVideoSources(savedVideoSources)
+            val context = appContext
+            if (context != null) {
+                viewModelScope.launch {
+                    withContext(Dispatchers.IO) { DemoVideoCache.removeSavedVideo(context, videoId) }
+                }
+            }
+            if (original != null) {
+                _uiState.update { state ->
+                    state.copy(
+                        horizontalVideos = state.horizontalVideos.map {
+                            if (it.id == videoId) it.copy(mediaUriString = original) else it
+                        },
+                        verticalClips = state.verticalClips.map {
+                            if (it.id == videoId) it.copy(mediaUriString = original) else it
+                        }
+                    )
+                }
+            }
+            return
+        }
+
+        val source = sourceUri ?: return
+        savedVideoSources[videoId] = source
+        localStore?.saveSavedVideoSources(savedVideoSources)
+        val context = appContext ?: return
+        viewModelScope.launch {
+            val localUri = withContext(Dispatchers.IO) {
+                DemoVideoCache.saveVideo(context, videoId, source)
+            }
+            val stillSaved = _uiState.value.horizontalVideos.any { it.id == videoId && it.isSaved } ||
+                _uiState.value.verticalClips.any { it.id == videoId && it.isSaved }
+            if (!stillSaved) {
+                withContext(Dispatchers.IO) { DemoVideoCache.removeSavedVideo(context, videoId) }
+                return@launch
+            }
+            if (localUri == null) {
+                _uiState.update {
+                    it.copy(feedbackMessage = "تعذر حفظ الفيديو على الهاتف، سيُعرض أونلاين")
+                }
+                return@launch
+            }
+            _uiState.update { state ->
+                state.copy(
+                    horizontalVideos = state.horizontalVideos.map {
+                        if (it.id == videoId) it.copy(mediaUriString = localUri) else it
+                    },
+                    verticalClips = state.verticalClips.map {
+                        if (it.id == videoId) it.copy(mediaUriString = localUri) else it
+                    }
+                )
+            }
         }
     }
 

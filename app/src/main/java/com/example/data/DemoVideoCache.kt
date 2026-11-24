@@ -11,15 +11,18 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Downloads the first demo clips into the app-private cache and resolves their
- * remote URLs to local file URIs. MediaPlayer / MediaMetadataRetriever already
- * accept file:// URIs, so no player code needs to know about the cache.
+ * Two local stores for demo videos:
+ *  - [cacheDir] holds the short feed videos. They are downloaded one by one and
+ *    each clip switches to its file as soon as that file is ready.
+ *  - [filesDir] holds videos the user explicitly saved. These survive cache
+ *    eviction and are only removed when the user unsaves them.
  *
- * A failed or partial download is deleted; [resolve] then returns the original
- * HTTPS URL so playback still works over the network.
+ * MediaPlayer / MediaMetadataRetriever accept file:// URIs, so no player code
+ * needs to know where the bytes came from.
  */
 object DemoVideoCache {
     private const val CACHE_DIR = "demo_clips"
+    private const val SAVED_DIR = "saved_clips"
     private const val MAX_FILE_BYTES = 25L * 1024 * 1024
     private const val MAX_CACHE_BYTES = 150L * 1024 * 1024
 
@@ -31,54 +34,126 @@ object DemoVideoCache {
         return File(File(context.applicationContext.cacheDir, CACHE_DIR), "$key.$extension")
     }
 
-    /** Returns a file:// URI when the clip is cached, otherwise the original URL. */
+    fun savedFileFor(context: Context, videoId: String): File {
+        val safeId = videoId
+            .filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+            .ifBlank { "video" }
+        return File(File(context.applicationContext.filesDir, SAVED_DIR), "$safeId.mp4")
+    }
+
+    /** Returns a file:// URI when the feed clip is cached, otherwise the original URL. */
     fun resolve(context: Context, url: String): String {
         val file = localFileFor(context, url)
         return if (file.exists() && file.length() > 0L) Uri.fromFile(file).toString() else url
     }
 
-    suspend fun prefetch(context: Context, urls: List<String>) = withContext(Dispatchers.IO) {
+    /** Returns a file:// URI only for a video the user saved locally. */
+    fun resolveSaved(context: Context, videoId: String): String? {
+        val file = savedFileFor(context, videoId)
+        return if (file.exists() && file.length() > 0L) Uri.fromFile(file).toString() else null
+    }
+
+    /**
+     * Downloads sequentially and reports each finished file immediately, so the
+     * UI can swap that clip to local playback without waiting for the whole list.
+     */
+    suspend fun prefetch(
+        context: Context,
+        urls: List<String>,
+        onPrepared: (url: String, localUri: String) -> Unit = { _, _ -> }
+    ) = withContext(Dispatchers.IO) {
         val dir = File(context.applicationContext.cacheDir, CACHE_DIR)
         if (!dir.exists() && !dir.mkdirs()) return@withContext
         enforceCacheLimit(dir)
 
-        // Sequential downloads: one network stream at a time, lowest memory use.
-        for (url in urls) {
+        // One network stream at a time, lowest memory use. Duplicates are skipped.
+        for (url in urls.distinct()) {
             val destination = localFileFor(context, url)
-            if (destination.exists() && destination.length() > 0L) continue
+            if (!destination.exists() || destination.length() == 0L) {
+                val partial = File(dir, destination.name + ".part")
+                val stored = runCatching {
+                    downloadInto(url, partial)
+                    if (!partial.renameTo(destination)) error("could not store video")
+                }.isSuccess
+                if (!stored) {
+                    runCatching { partial.delete() }
+                    continue
+                }
+            }
+            onPrepared(url, Uri.fromFile(destination).toString())
+        }
+    }
+
+    /**
+     * Copies an already-cached clip or downloads a remote one into persistent
+     * app storage. Returns the file:// URI to use for offline playback.
+     */
+    suspend fun saveVideo(context: Context, videoId: String, sourceUrl: String): String? =
+        withContext(Dispatchers.IO) {
+            val destination = savedFileFor(context, videoId)
+            if (destination.exists() && destination.length() > 0L) {
+                return@withContext Uri.fromFile(destination).toString()
+            }
+            val dir = destination.parentFile ?: return@withContext null
+            if (!dir.exists() && !dir.mkdirs()) return@withContext null
 
             val partial = File(dir, destination.name + ".part")
-            runCatching {
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.connectTimeout = 10_000
-                connection.readTimeout = 15_000
-                connection.instanceFollowRedirects = true
-                connection.useCaches = false
-                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                    error("HTTP ${connection.responseCode}")
-                }
-                val expectedLength = connection.contentLengthLong
-                connection.inputStream.use { input ->
-                    FileOutputStream(partial).use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var total = 0L
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            total += read
-                            if (total > MAX_FILE_BYTES) error("video too large")
-                            output.write(buffer, 0, read)
-                        }
-                        output.flush()
+            val stored = runCatching {
+                when {
+                    sourceUrl.startsWith("file://", ignoreCase = true) -> {
+                        val source = File(Uri.parse(sourceUrl).path.orEmpty())
+                        require(source.exists() && source.length() > 0L) { "cached source missing" }
+                        source.copyTo(partial, overwrite = true)
                     }
+                    sourceUrl.startsWith("http", ignoreCase = true) -> downloadInto(sourceUrl, partial)
+                    else -> error("unsupported video source: $sourceUrl")
                 }
-                if (expectedLength > 0L && partial.length() != expectedLength) {
-                    error("incomplete download")
-                }
-                if (!partial.renameTo(destination)) error("could not store video")
-            }.onFailure {
+                if (partial.length() <= 0L) error("empty saved video")
+                if (!partial.renameTo(destination)) error("could not store saved video")
+            }.isSuccess
+
+            if (!stored) {
                 runCatching { partial.delete() }
+                null
+            } else {
+                Uri.fromFile(destination).toString()
             }
+        }
+
+    fun removeSavedVideo(context: Context, videoId: String): Boolean {
+        val file = savedFileFor(context, videoId)
+        return file.exists() && file.delete()
+    }
+
+    private fun downloadInto(url: String, destination: File): Long {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        try {
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.instanceFollowRedirects = true
+            connection.useCaches = false
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                error("HTTP ${connection.responseCode}")
+            }
+            val expectedLength = connection.contentLengthLong
+            var total = 0L
+            connection.inputStream.use { input ->
+                FileOutputStream(destination).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        total += read
+                        if (total > MAX_FILE_BYTES) error("video too large")
+                        output.write(buffer, 0, read)
+                    }
+                    output.flush()
+                }
+            }
+            if (expectedLength > 0L && total != expectedLength) error("incomplete download")
+            return total
+        } finally {
+            connection.disconnect()
         }
     }
 
