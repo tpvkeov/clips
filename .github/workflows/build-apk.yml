@@ -132,6 +132,8 @@ jobs:
           fi
           git clone --depth 1 "https://x-access-token:${UPDATES_TOKEN}@github.com/tpvkeov/clips-updates.git" updates-repo
           cp app/build/outputs/apk/debug/app-debug.apk updates-repo/app-debug.apk
+          # Mirror the unified SQL so the public raw link always matches the app.
+          cp supabase/master_setup.sql updates-repo/master_setup.sql
           cat > updates-repo/update.json <<EOF
           {
             "versionCode": ${VERSION_CODE},
@@ -144,7 +146,7 @@ jobs:
           cd updates-repo
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app-debug.apk update.json
+          git add app-debug.apk update.json master_setup.sql
           if ! git diff --cached --quiet; then
             git commit -m "Publish update ${VERSION_NAME}"
             git push
