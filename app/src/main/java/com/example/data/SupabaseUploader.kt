@@ -62,7 +62,9 @@ object SupabaseUploader {
             val sha1 = MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
             val put = Request.Builder()
                 .url(uploadUrl)
-                .put(bytes.toRequestBody(mime.toMediaType()))
+                // B2 Native API's b2_upload_file accepts POST only (PUT is the
+                // S3-compatible API). OkHttp sets Content-Length for byte bodies.
+                .post(bytes.toRequestBody(mime.toMediaType()))
                 .addHeader("Authorization", uploadToken)
                 .addHeader("X-Bz-File-Name", URLEncoder.encode(b2Key, "UTF-8"))
                 .addHeader("X-Bz-Content-Sha1", sha1)
