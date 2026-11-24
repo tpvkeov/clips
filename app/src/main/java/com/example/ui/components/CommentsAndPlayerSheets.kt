@@ -138,6 +138,9 @@ fun CommentsBottomSheet(
     getAvatarPreset: (String) -> AvatarPreset,
     onAddComment: (String) -> Unit,
     onReportComment: (CommentItem) -> Unit,
+    canLoadMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -356,6 +359,20 @@ fun CommentsBottomSheet(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
+                            }
+                        }
+                    }
+                    if (canLoadMore) {
+                        item(key = "comments_load_more") {
+                            Button(
+                                onClick = onLoadMore,
+                                enabled = !isLoadingMore,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = accent)
+                            ) {
+                                Text(if (isLoadingMore) "جارٍ تحميل المزيد…" else "عرض تعليقات أقدم")
                             }
                         }
                     }

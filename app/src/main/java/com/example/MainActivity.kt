@@ -470,6 +470,9 @@ fun ClipsRootApp(providedViewModel: ClipsViewModel? = null) {
                         getAvatarPreset = viewModel::getAvatarPreset,
                         onAddComment = { text -> viewModel.addComment(target, text) },
                         onReportComment = viewModel::reportComment,
+                        canLoadMore = viewModel.hasMoreComments(target),
+                        isLoadingMore = state.isLoadingComments,
+                        onLoadMore = { viewModel.loadMoreComments(target) },
                         onDismiss = viewModel::closeComments
                     )
                 }

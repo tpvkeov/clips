@@ -1041,6 +1041,9 @@ class ClipsViewModel(
 
     fun loadMoreComments(target: CommentsTarget) = loadCommentsPage(target, refresh = false)
 
+    fun hasMoreComments(target: CommentsTarget): Boolean =
+        _uiState.value.commentNextCursors[commentsKey(target)] != null
+
     fun consumeFeedback() {
         _uiState.update { it.copy(feedbackMessage = null) }
     }
