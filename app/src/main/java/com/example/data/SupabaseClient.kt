@@ -28,8 +28,9 @@ object SupabaseClient {
 
     val url: String = BuildConfig.SUPABASE_URL.trim().trimEnd('/')
     val anonKey: String = BuildConfig.SUPABASE_ANON_KEY.trim()
-    val functionsUrl: String = BuildConfig.SUPABASE_FUNCTIONS_URL.trim().trimEnd('/')
-        .ifBlank { "$url/functions/v1" }
+    // Derived from SUPABASE_URL so a stray/malformed SUPABASE_FUNCTIONS_URL value
+    // in .env can never break BuildConfig generation.
+    val functionsUrl: String = "$url/functions/v1"
 
     val isConfigured: Boolean
         get() = url.startsWith("https://") &&

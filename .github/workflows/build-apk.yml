@@ -88,7 +88,6 @@ jobs:
           {
             echo "SUPABASE_URL=$SUPABASE_URL"
             echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
-            echo "SUPABASE_FUNCTIONS_URL=$SUPABASE_URL/functions/v1"
           } > .env
           echo "Wrote gitignored .env for this build"
 
