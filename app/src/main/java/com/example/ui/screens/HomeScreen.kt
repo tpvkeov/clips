@@ -82,11 +82,10 @@ import com.example.model.VideoItem
 import com.example.ui.components.CinematicGlowingSearchBar
 import com.example.ui.components.CircularSaveWaterButton
 import com.example.ui.components.ClipsBrandIcon
-import com.example.ui.components.FeaturedClipsCarouselSection
 import com.example.ui.components.HighQualityAvatarView
 import com.example.ui.components.HomeStoriesStrip
+import com.example.ui.components.FeaturedClipsCarouselSection
 import com.example.ui.components.MediaSceneArtwork
-import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.cloudyLightHeader
 import com.example.ui.components.formatCompactCount
 import com.example.ui.theme.LocalCustomButtonColors
@@ -352,31 +351,6 @@ fun HomeScreen(
                 }
             }
 
-            item(key = "horizontal_videos_header") {
-                SectionHeaderRow(
-                    title = if (searchQuery.isBlank()) "الفيديوهات" else "نتائج البحث",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 760.dp)
-                        .padding(horizontal = 16.dp),
-                    trailingContent = {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
-                        ) {
-                            Text(
-                                text = "${videos.size} فيديو",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-                )
-            }
-
             if (videos.isEmpty()) {
                 item(key = "empty_search_state") {
                     HomeEmptyStateCard(
@@ -417,7 +391,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Featured Clips horizontal carousel placed cleanly after the first 3 videos
+                // Featured clips carousel after the first three videos.
                 if (featuredClips.isNotEmpty() && searchQuery.isBlank()) {
                     item(key = "featured_clips_carousel_section") {
                         FeaturedClipsCarouselSection(

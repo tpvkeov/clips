@@ -222,6 +222,12 @@ object DemoDataFactory {
         const val JELLYFISH_1MB = "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4"
         const val SINTEL_1MB = "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4"
         const val SAMPLE_640 = "https://filesamples.com/samples/video/mp4/sample_640x360.mp4"
+        const val VERTICAL_5S = "https://samplelib.com/vertical/sample-vertical-5s.mp4"
+        const val VERTICAL_10S = "https://samplelib.com/vertical/sample-vertical-10s.mp4"
+        const val VERTICAL_15S = "https://samplelib.com/vertical/sample-vertical-15s.mp4"
+        const val VERTICAL_20S = "https://samplelib.com/vertical/sample-vertical-20s.mp4"
+        const val VERTICAL_30S = "https://samplelib.com/vertical/sample-vertical-30s.mp4"
+        const val VERTICAL_15S_4X5 = "https://samplelib.com/vertical/sample-vertical-15s-4x5.mp4"
     }
 
     val initialHorizontalVideos: List<VideoItem> = listOf(
@@ -414,20 +420,19 @@ object DemoDataFactory {
         )
     )
 
-    // Verified browser-playable HTTPS MP4s. Small/range-capable files first so
-    // the first ten clips cache quickly on mobile data; samplelib was removed
-    // because it timed out during verification.
+    // All Clips media is genuinely portrait (9:16 or 4:5). Landscape MP4s are
+    // used only by the Home feed and Posts player, never by the reels feed.
     val demoClipVideoUrls: List<String> = listOf(
-        DemoMediaUrls.FLOWER,
-        DemoMediaUrls.BBB_1MB,
-        DemoMediaUrls.JELLYFISH_1MB,
-        DemoMediaUrls.SINTEL_1MB,
-        DemoMediaUrls.SAMPLE_640,
-        DemoMediaUrls.W3_MOVIE_300,
-        DemoMediaUrls.W3_BUNNY,
-        DemoMediaUrls.SINTEL_480P,
-        DemoMediaUrls.W3_SINTEL,
-        DemoMediaUrls.BBB_2MB
+        DemoMediaUrls.VERTICAL_5S,
+        DemoMediaUrls.VERTICAL_10S,
+        DemoMediaUrls.VERTICAL_15S,
+        DemoMediaUrls.VERTICAL_20S,
+        DemoMediaUrls.VERTICAL_30S,
+        DemoMediaUrls.VERTICAL_15S_4X5,
+        DemoMediaUrls.VERTICAL_5S,
+        DemoMediaUrls.VERTICAL_10S,
+        DemoMediaUrls.VERTICAL_15S,
+        DemoMediaUrls.VERTICAL_20S
     )
 
     val initialVerticalClips: List<VideoItem> = listOf(

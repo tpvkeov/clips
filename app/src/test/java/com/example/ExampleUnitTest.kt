@@ -192,6 +192,14 @@ class ExampleUnitTest {
       DemoDataFactory.initialHorizontalVideos.all { !it.mediaUriString.isNullOrBlank() }
     )
     assertTrue(
+      "Clips media must be portrait videos",
+      DemoDataFactory.demoClipVideoUrls.all { it.contains("/vertical/") }
+    )
+    assertTrue(
+      "Every vertical clip must use portrait media",
+      verticalUrls.all { it.contains("/vertical/") }
+    )
+    assertTrue(
       "Every linked video post should have a playable preview",
       DemoDataFactory.initialPosts
         .filter { !it.linkedVideoId.isNullOrBlank() }

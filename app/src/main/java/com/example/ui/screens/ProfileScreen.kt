@@ -800,15 +800,28 @@ fun ProfileScreen(
                 }
             ) {
                 sectionTitles.forEachIndexed { index, title ->
+                    val savedTab = index == sectionTitles.lastIndex
                     Tab(
                         selected = selectedSectionTab == index,
                         onClick = { selectedSectionTab = index },
-                        text = {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = if (selectedSectionTab == index) FontWeight.Bold else FontWeight.Normal
-                            )
+                        icon = if (savedTab) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Bookmark,
+                                    contentDescription = "المحفوظات"
+                                )
+                            }
+                        } else null,
+                        text = if (savedTab) {
+                            null
+                        } else {
+                            {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (selectedSectionTab == index) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         },
                         modifier = Modifier.testTag("profile_tab_$index")
                     )
