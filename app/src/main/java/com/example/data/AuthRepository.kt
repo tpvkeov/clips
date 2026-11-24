@@ -163,6 +163,20 @@ class AuthRepository(
     fun isDeviceBanned(device: DeviceIdentity?): Boolean =
         device != null && securityStore.isDeviceBanned(device)
 
+    /** Sends kernel/baseband/fingerprints to Supabase at login and session restore. */
+    suspend fun syncDeviceWithServer(
+        device: DeviceIdentity,
+        userUid: String? = null
+    ): Result<String> = SupabaseDeviceGateway.syncDevice(device, userUid)
+
+    /** Server-side ban check. null means the backend could not be reached. */
+    suspend fun isDeviceBannedOnServer(device: DeviceIdentity): Boolean? =
+        SupabaseDeviceGateway.isDeviceBanned(device)
+
+    fun markDeviceBanned(device: DeviceIdentity) {
+        securityStore.banDevice(device)
+    }
+
     /** Admin hook: banning an account also bans the device that signed in with it. */
     fun banAccountAndDevice(uid: String, device: DeviceIdentity? = null) {
         securityStore.banUser(uid)

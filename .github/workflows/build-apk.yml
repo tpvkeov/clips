@@ -6,12 +6,36 @@ on:
       - main
       - master
   workflow_dispatch:
+  # Supabase Free pauses projects after a week of inactivity. A lightweight
+  # REST ping every 6 hours keeps Auth/Postgres/Edge Functions warm.
+  schedule:
+    - cron: '0 */6 * * *'
 
 permissions:
   contents: read
 
 jobs:
+  keep-supabase-awake:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::warning::SUPABASE_URL secret is not set; keep-alive skipped"
+            exit 0
+          fi
+          curl -fsS "$SUPABASE_URL/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY:-}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY:-}" \
+            > /dev/null
+          echo "Supabase pinged successfully"
+
   build-apk:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
     steps:

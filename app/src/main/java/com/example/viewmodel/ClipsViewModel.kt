@@ -15,6 +15,9 @@ import com.example.data.DemoVideoCache
 import com.example.data.DeviceIdentityCollector
 import com.example.data.ProfileAvatarState
 import com.example.data.ReelsFeedSelector
+import com.example.data.SupabaseClient
+import com.example.data.SupabaseContentRepository
+import com.example.data.SupabaseUploader
 import com.example.data.VideoProcessingService
 import com.example.data.WatchProgress
 import com.example.model.AuthMode
@@ -382,6 +385,31 @@ class ClipsViewModel(
                 )
             }
             if (lockedUntil > System.currentTimeMillis()) startAuthLockTicker(lockedUntil)
+
+            if (device != null && SupabaseClient.isConfigured) {
+                val sessionUid = session?.uid
+                viewModelScope.launch {
+                    val serverBanned = runCatching { repository.isDeviceBannedOnServer(device) }.getOrNull()
+                    if (serverBanned == true) {
+                        repository.markDeviceBanned(device)
+                        repository.signOut()
+                        _uiState.update { state ->
+                            state.copy(
+                                auth = state.auth.copy(
+                                    isLoggedIn = false,
+                                    isGuest = true,
+                                    user = null,
+                                    isDeviceBanned = true,
+                                    isLoading = false,
+                                    errorAr = null
+                                )
+                            )
+                        }
+                    } else {
+                        runCatching { repository.syncDeviceWithServer(device, sessionUid) }
+                    }
+                }
+            }
         }
 
         // Download the first feed clips one by one and switch each clip to its
@@ -396,6 +424,63 @@ class ClipsViewModel(
             viewModelScope.launch {
                 DemoVideoCache.prefetch(context, DemoDataFactory.demoClipVideoUrls) { url, localUri ->
                     val ids = clipIdsByUrl[url].orEmpty()
+                    if (ids.isNotEmpty()) {
+                        _uiState.update { state ->
+                            state.copy(
+                                verticalClips = state.verticalClips.map { clip ->
+                                    if (clip.id in ids && clip.mediaUriString == url) {
+                                        clip.copy(mediaUriString = localUri)
+                                    } else clip
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Real backend feed. Demo data stays on screen until Supabase answers,
+        // so a cold start or an offline device still has something to play.
+        if (SupabaseClient.isConfigured) {
+            viewModelScope.launch {
+                val feed = SupabaseContentRepository.loadFeed().getOrNull() ?: return@launch
+                if (feed.horizontal.isEmpty() && feed.vertical.isEmpty()) return@launch
+
+                val savedIds = localStore?.loadSavedVideoIds().orEmpty()
+                val savedSources = localStore?.loadSavedVideoSources().orEmpty()
+                savedVideoSources.putAll(savedSources)
+
+                fun restoreLocalState(video: VideoItem): VideoItem {
+                    if (video.id !in savedIds) return video
+                    val localUri = appContext?.let { DemoVideoCache.resolveSaved(it, video.id) }
+                        ?: savedSources[video.id]
+                    return if (localUri.isNullOrBlank()) {
+                        video.copy(isSaved = true)
+                    } else {
+                        video.copy(isSaved = true, mediaUriString = localUri)
+                    }
+                }
+
+                val horizontal = feed.horizontal.map(::restoreLocalState)
+                val vertical = feed.vertical.map(::restoreLocalState)
+                _uiState.update { state ->
+                    state.copy(
+                        horizontalVideos = horizontal.ifEmpty { state.horizontalVideos },
+                        verticalClips = vertical.ifEmpty { state.verticalClips }
+                    )
+                }
+
+                val context = appContext ?: return@launch
+                val firstClips = vertical.take(10)
+                val remoteClipIdsByUrl = firstClips
+                    .mapNotNull { clip -> clip.mediaUriString?.takeIf { it.isNotBlank() }?.to(clip.id) }
+                    .groupBy({ it.first }, { it.second })
+                    .mapValues { entry -> entry.value.toSet() }
+                val remoteUrls = remoteClipIdsByUrl.keys.toList()
+                if (remoteUrls.isEmpty()) return@launch
+
+                DemoVideoCache.prefetch(context, remoteUrls) { url, localUri ->
+                    val ids = remoteClipIdsByUrl[url].orEmpty()
                     if (ids.isNotEmpty()) {
                         _uiState.update { state ->
                             state.copy(
@@ -1100,6 +1185,9 @@ class ClipsViewModel(
 
     private fun isProcessableVideo(uri: String?): Boolean {
         if (uri.isNullOrBlank()) return false
+        if (uri.startsWith("http://", ignoreCase = true) ||
+            uri.startsWith("https://", ignoreCase = true)
+        ) return false
         val context = appContext ?: return false
         val mime = runCatching { context.contentResolver.getType(Uri.parse(uri)) }.getOrNull()
         if (mime?.startsWith("video/") == true) return true
@@ -1178,6 +1266,55 @@ class ClipsViewModel(
     }
 
     fun publishFromUpload(
+        contentType: UploadContentType,
+        title: String,
+        description: String,
+        category: String,
+        visualStyle: MediaVisualStyle,
+        mediaUriString: String?,
+        avatarOverlayId: String?
+    ) {
+        val context = appContext
+        val localUri = mediaUriString
+        val isVideo = contentType != UploadContentType.PHOTO_POST
+        val needsUpload = isVideo && context != null && !localUri.isNullOrBlank() &&
+            SupabaseClient.isConfigured &&
+            !localUri.startsWith("http://", ignoreCase = true) &&
+            !localUri.startsWith("https://", ignoreCase = true)
+        val mediaUri = runCatching { localUri?.let { Uri.parse(it) } }.getOrNull()
+
+        if (!needsUpload || mediaUri == null) {
+            publishFromUploadLocal(
+                contentType, title, description, category, visualStyle,
+                mediaUriString, avatarOverlayId
+            )
+            return
+        }
+
+        _uiState.update { it.copy(feedbackMessage = "جارٍ رفع الفيديو على السيرفر...") }
+        viewModelScope.launch {
+            val uploadedUrl = SupabaseUploader.uploadVideo(
+                context = context,
+                mediaUri = mediaUri,
+                title = title.trim(),
+                description = description.trim(),
+                isVertical = contentType == UploadContentType.VERTICAL_CLIP,
+                uploadType = if (contentType == UploadContentType.VERTICAL_CLIP) "short" else "wide"
+            ).getOrNull()
+
+            publishFromUploadLocal(
+                contentType, title, description, category, visualStyle,
+                uploadedUrl ?: mediaUriString, avatarOverlayId
+            )
+            if (uploadedUrl == null) {
+                _uiState.update {
+                    it.copy(feedbackMessage = "تعذر رفع الفيديو على السيرفر، سيُعرض على الجهاز فقط")
+                }
+            }
+        }
+    }
+
+    private fun publishFromUploadLocal(
         contentType: UploadContentType,
         title: String,
         description: String,
@@ -1293,6 +1430,48 @@ class ClipsViewModel(
     }
 
     fun publishFromPostsTab(
+        content: String,
+        isHorizontalVideo: Boolean,
+        videoTitle: String,
+        mediaUriString: String?,
+        fallbackStyle: MediaVisualStyle?
+    ) {
+        val context = appContext
+        val needsUpload = isHorizontalVideo && context != null && !mediaUriString.isNullOrBlank() &&
+            SupabaseClient.isConfigured &&
+            !mediaUriString.startsWith("http://", ignoreCase = true) &&
+            !mediaUriString.startsWith("https://", ignoreCase = true)
+        val mediaUri = runCatching { mediaUriString?.let { Uri.parse(it) } }.getOrNull()
+
+        if (!needsUpload || mediaUri == null) {
+            publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, mediaUriString, fallbackStyle)
+            return
+        }
+
+        _uiState.update { it.copy(feedbackMessage = "جارٍ رفع الفيديو على السيرفر...") }
+        viewModelScope.launch {
+            val resolvedTitle = videoTitle.trim().ifEmpty {
+                content.trim().take(48).ifEmpty { "فيديو أفقي جديد من ${_uiState.value.userProfile.name}" }
+            }
+            val uploadedUrl = SupabaseUploader.uploadVideo(
+                context = context,
+                mediaUri = mediaUri,
+                title = resolvedTitle,
+                description = content.trim(),
+                isVertical = false,
+                uploadType = "wide"
+            ).getOrNull()
+
+            publishFromPostsTabLocal(content, isHorizontalVideo, videoTitle, uploadedUrl ?: mediaUriString, fallbackStyle)
+            if (uploadedUrl == null) {
+                _uiState.update {
+                    it.copy(feedbackMessage = "تعذر رفع الفيديو على السيرفر، سيُعرض على الجهاز فقط")
+                }
+            }
+        }
+    }
+
+    private fun publishFromPostsTabLocal(
         content: String,
         isHorizontalVideo: Boolean,
         videoTitle: String,
@@ -1509,12 +1688,14 @@ class ClipsViewModel(
         if (auth.isLoading || auth.lockUntilMillis > System.currentTimeMillis()) return
 
         _uiState.update { it.copy(auth = it.auth.copy(isLoading = true, errorAr = null)) }
-        val attempt = if (auth.mode == AuthMode.REGISTER) {
-            repository.registerWithEmail(auth.name, auth.email, auth.password)
-        } else {
-            repository.signInWithEmail(auth.email, auth.password)
+        viewModelScope.launch {
+            val attempt = if (auth.mode == AuthMode.REGISTER) {
+                repository.registerWithEmail(auth.name, auth.email, auth.password)
+            } else {
+                repository.signInWithEmail(auth.email, auth.password)
+            }
+            handleAuthAttempt(attempt)
         }
-        handleAuthAttempt(attempt)
     }
 
     fun submitGoogleAuth(activityContext: Context) {
@@ -1529,13 +1710,37 @@ class ClipsViewModel(
         }
     }
 
-    private fun handleAuthAttempt(attempt: AuthAttempt) {
+    private suspend fun handleAuthAttempt(attempt: AuthAttempt) {
         val pendingAction = _uiState.value.auth.pendingAction
         val securityStore = appContext?.let { AuthSecurityStore(it) }
         var newLockUntil: Long? = null
 
         if (attempt.user != null) {
             val user = attempt.user
+            val repository = authRepository
+            val device = appContext?.let { DeviceIdentityCollector.collect(it) }
+            if (device != null && repository != null && SupabaseClient.isConfigured) {
+                val serverBanned = runCatching { repository.isDeviceBannedOnServer(device) }.getOrNull()
+                if (serverBanned == true) {
+                    repository.markDeviceBanned(device)
+                    repository.signOut()
+                    _uiState.update { state ->
+                        state.copy(
+                            auth = state.auth.copy(
+                                isLoggedIn = false,
+                                isGuest = true,
+                                user = null,
+                                isDeviceBanned = true,
+                                isLoading = false,
+                                errorAr = "تم حظر هذا الجهاز من السيرفر.",
+                                pendingAction = null
+                            )
+                        )
+                    }
+                    return
+                }
+                runCatching { repository.syncDeviceWithServer(device, user.uid) }
+            }
             val accent = _uiState.value.auth.selectedAccentArgb
                 ?.let { AppThemeAccent.fromArgb(it) }
                 ?: _uiState.value.themeAccent
@@ -1603,9 +1808,33 @@ class ClipsViewModel(
 
     fun recheckDeviceBan() {
         val repository = authRepository ?: return
-        val device = appContext?.let { DeviceIdentityCollector.collect(it) }
-        val banned = device?.let { repository.isDeviceBanned(it) } == true
-        _uiState.update { state -> state.copy(auth = state.auth.copy(isDeviceBanned = banned)) }
+        val device = appContext?.let { DeviceIdentityCollector.collect(it) } ?: return
+        val localBanned = repository.isDeviceBanned(device)
+        _uiState.update { state -> state.copy(auth = state.auth.copy(isDeviceBanned = localBanned)) }
+        if (!SupabaseClient.isConfigured) return
+
+        viewModelScope.launch {
+            val serverBanned = runCatching { repository.isDeviceBannedOnServer(device) }.getOrNull()
+            if (serverBanned == true) {
+                repository.markDeviceBanned(device)
+                repository.signOut()
+                _uiState.update { state ->
+                    state.copy(
+                        auth = state.auth.copy(
+                            isLoggedIn = false,
+                            isGuest = true,
+                            user = null,
+                            isDeviceBanned = true,
+                            isLoading = false
+                        )
+                    )
+                }
+            } else {
+                runCatching {
+                    repository.syncDeviceWithServer(device, _uiState.value.auth.user?.uid)
+                }
+            }
+        }
     }
 
     fun signOut() {

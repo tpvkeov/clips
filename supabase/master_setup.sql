@@ -820,7 +820,8 @@ CREATE POLICY "Admins view storage usage" ON public.storage_usage FOR SELECT USI
 
 CREATE TABLE IF NOT EXISTS public.b2_upload_sessions (
     session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    -- NULL is allowed for local/Firebase sessions; only Supabase Auth users are UUIDs.
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     b2_key TEXT UNIQUE,
     expected_size BIGINT NOT NULL CHECK (expected_size > 0),
     upload_type TEXT NOT NULL DEFAULT 'short' CHECK (upload_type IN ('wide', 'short', 'post', 'video_in_post')),
@@ -831,6 +832,8 @@ CREATE TABLE IF NOT EXISTS public.b2_upload_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '24 hours')
 );
+-- Existing installations already created this column as NOT NULL.
+ALTER TABLE public.b2_upload_sessions ALTER COLUMN user_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS b2_sessions_user_expiry_idx ON public.b2_upload_sessions(user_id, expires_at);
 
 ALTER TABLE public.b2_upload_sessions ENABLE ROW LEVEL SECURITY;
@@ -1101,8 +1104,10 @@ $$;
 
 -- حجز جلسة رفع B2 (للـ Edge Function بس - service_role)
 CREATE OR REPLACE FUNCTION public.reserve_b2_upload_session(
-    p_user_id UUID,
-    p_expected_size BIGINT,
+    -- Defaults on every parameter keep the existing (uuid,bigint,text,text)
+    -- signature while allowing local/Firebase sessions to omit the user id.
+    p_user_id UUID DEFAULT NULL,
+    p_expected_size BIGINT DEFAULT 0,
     p_b2_key TEXT DEFAULT NULL,
     p_upload_type TEXT DEFAULT 'short'
 )
@@ -1119,9 +1124,29 @@ BEGIN
         RAISE EXCEPTION 'service role required' USING ERRCODE = '42501';
     END IF;
 
-    v_check := public.check_upload_limit(p_user_id, p_upload_type, p_expected_size);
-    IF COALESCE(v_check->>'allowed', 'false') <> 'true' THEN
-        RAISE EXCEPTION 'upload_not_allowed: %', v_check->>'reason' USING ERRCODE = '22023';
+    IF p_expected_size IS NULL OR p_expected_size <= 0 THEN
+        RAISE EXCEPTION 'invalid_file_size' USING ERRCODE = '22023';
+    END IF;
+
+    IF p_upload_type NOT IN ('wide', 'short', 'post', 'video_in_post') THEN
+        RAISE EXCEPTION 'invalid_upload_type' USING ERRCODE = '22023';
+    END IF;
+
+    -- Anonymous/local sessions are grouped under one lock; real users keep
+    -- their own lock so per-user limits stay race-free.
+    PERFORM pg_advisory_xact_lock(hashtext(COALESCE(p_user_id::TEXT, 'anon')), 0);
+
+    IF p_user_id IS NULL THEN
+        -- No profile/daily-limit row exists for a local account. Enforce only
+        -- the same hard 50 MiB ceiling so the 10 GiB B2 quota cannot be abused.
+        IF p_expected_size > 52428800 THEN
+            RAISE EXCEPTION 'upload_not_allowed: حجم الملف يتجاوز 50 ميجا' USING ERRCODE = '22023';
+        END IF;
+    ELSE
+        v_check := public.check_upload_limit(p_user_id, p_upload_type, p_expected_size);
+        IF COALESCE(v_check->>'allowed', 'false') <> 'true' THEN
+            RAISE EXCEPTION 'upload_not_allowed: %', v_check->>'reason' USING ERRCODE = '22023';
+        END IF;
     END IF;
 
     SELECT * INTO v_limit FROM public.storage_usage WHERE bucket = 'clips-videos';
@@ -1133,27 +1158,27 @@ BEGIN
         RAISE EXCEPTION 'global_storage_full' USING ERRCODE = '22023';
     END IF;
 
-    PERFORM pg_advisory_xact_lock(hashtext(p_user_id::TEXT), 0);
+    IF p_user_id IS NOT NULL THEN
+        DELETE FROM public.b2_upload_sessions
+        WHERE user_id = p_user_id AND expires_at <= now();
 
-    DELETE FROM public.b2_upload_sessions
-    WHERE user_id = p_user_id AND expires_at <= now();
+        SELECT count(*)::INTEGER INTO v_active
+        FROM public.b2_upload_sessions
+        WHERE user_id = p_user_id
+          AND status IN ('reserved','initialized','uploaded','processing')
+          AND expires_at > now();
+        IF v_active >= 3 THEN
+            RAISE EXCEPTION 'upload_limit' USING ERRCODE = '22023';
+        END IF;
 
-    SELECT count(*)::INTEGER INTO v_active
-    FROM public.b2_upload_sessions
-    WHERE user_id = p_user_id
-      AND status IN ('reserved','initialized','uploaded','processing')
-      AND expires_at > now();
-    IF v_active >= 3 THEN
-        RAISE EXCEPTION 'upload_limit' USING ERRCODE = '22023';
-    END IF;
-
-    SELECT count(*)::INTEGER INTO v_recent
-    FROM public.b2_upload_sessions
-    WHERE user_id = p_user_id
-      AND status IN ('uploaded','processing','ready')
-      AND created_at >= now() - INTERVAL '24 hours';
-    IF v_recent >= 5 THEN
-        RAISE EXCEPTION 'daily_upload_limit' USING ERRCODE = '22023';
+        SELECT count(*)::INTEGER INTO v_recent
+        FROM public.b2_upload_sessions
+        WHERE user_id = p_user_id
+          AND status IN ('uploaded','processing','ready')
+          AND created_at >= now() - INTERVAL '24 hours';
+        IF v_recent >= 5 THEN
+            RAISE EXCEPTION 'daily_upload_limit' USING ERRCODE = '22023';
+        END IF;
     END IF;
 
     INSERT INTO public.b2_upload_sessions (user_id, b2_key, expected_size, upload_type, status)
