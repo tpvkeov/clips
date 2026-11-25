@@ -335,6 +335,7 @@ fun UploadStudioScreen(
 
                 Button(
                     onClick = {
+                        val mediaUri = capturedOrPickedUri ?: return@Button
                         val visualStyle = if (selectedType == UploadContentType.VERTICAL_CLIP) {
                             MediaVisualStyle.CYBER_CITY
                         } else {
@@ -346,13 +347,14 @@ fun UploadStudioScreen(
                             description,
                             if (selectedType == UploadContentType.VERTICAL_CLIP) "clips" else "عام",
                             visualStyle,
-                            capturedOrPickedUri,
+                            mediaUri,
                             null
                         )
                         title = ""
                         description = ""
                         capturedOrPickedUri = null
                     },
+                    enabled = capturedOrPickedUri != null,
                     colors = ButtonDefaults.buttonColors(containerColor = uploadButtonAccent),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier

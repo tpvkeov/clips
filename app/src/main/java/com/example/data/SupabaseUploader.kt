@@ -38,11 +38,13 @@ object SupabaseUploader {
         runCatching {
             if (!SupabaseClient.isConfigured) throw IOException("SUPABASE_NOT_CONFIGURED")
 
-            val mime = context.contentResolver.getType(mediaUri)?.takeIf { it.isNotBlank() }
+            val mime = runCatching { context.contentResolver.getType(mediaUri) }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() }
                 ?: "video/mp4"
-            val bytes = context.contentResolver.openInputStream(mediaUri)?.use { it.readBytes() }
-                ?: throw IOException("تعذر قراءة الملف")
-            if (bytes.isEmpty()) throw IOException("الملف فارغ")
+            val mediaType = runCatching { mime.toMediaType() }.getOrNull()
+            // Never load the whole file into memory: large picks were causing OOM crashes.
+            val fingerprint = inspectMedia(context, mediaUri)
             onProgress(0.02f)
 
             val b2Key = "clips_${System.currentTimeMillis()}_${UUID.randomUUID()}.${extensionFor(mime)}"
@@ -50,7 +52,7 @@ object SupabaseUploader {
                 "upload-ticket",
                 JSONObject()
                     .put("fileName", b2Key)
-                    .put("size", bytes.size)
+                    .put("size", fingerprint.size)
                     .put("contentType", mime)
                     .put("uploadType", uploadType)
             ).getOrThrow()
@@ -64,8 +66,12 @@ object SupabaseUploader {
             }
             onProgress(0.08f)
 
-            val sha1 = MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
-            val uploadBody = ProgressRequestBody(bytes, mime.toMediaType()) { fraction ->
+            val uploadBody = StreamingUriRequestBody(
+                context = context,
+                uri = mediaUri,
+                contentType = mediaType,
+                contentLength = fingerprint.size
+            ) { fraction ->
                 // Reading/ticket take 0..0.08, the B2 transfer 0.12..0.88.
                 onProgress(0.12f + 0.76f * fraction.coerceIn(0f, 1f))
             }
@@ -76,7 +82,7 @@ object SupabaseUploader {
                 .post(uploadBody)
                 .addHeader("Authorization", uploadToken)
                 .addHeader("X-Bz-File-Name", URLEncoder.encode(b2Key, "UTF-8"))
-                .addHeader("X-Bz-Content-Sha1", sha1)
+                .addHeader("X-Bz-Content-Sha1", fingerprint.sha1)
                 .addHeader("Content-Type", mime)
                 .build()
 
@@ -100,7 +106,7 @@ object SupabaseUploader {
                     .put("description", description)
                     .put("isVertical", isVertical)
                     .put("mimeType", mime)
-                    .put("sizeBytes", bytes.size)
+                    .put("sizeBytes", fingerprint.size)
                     .put("duration", durationSeconds)
                     .put("b2Key", b2Key)
                     .put("fileId", fileId)
@@ -119,23 +125,58 @@ object SupabaseUploader {
         }
     }
 
-    /** Streams bytes to OkHttp while reporting real upload progress. */
-    private class ProgressRequestBody(
-        private val bytes: ByteArray,
+    private data class MediaFingerprint(val size: Long, val sha1: String)
+
+    /**
+     * First streaming pass: size + SHA-1 without ever holding the file in RAM.
+     */
+    private fun inspectMedia(context: Context, uri: Uri): MediaFingerprint {
+        val digest = MessageDigest.getInstance("SHA-1")
+        val buffer = ByteArray(256 * 1024)
+        var total = 0L
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                digest.update(buffer, 0, read)
+                total += read
+            }
+        } ?: throw IOException("تعذر قراءة الملف")
+        if (total <= 0L) throw IOException("الملف فارغ")
+        val sha1 = digest.digest().joinToString("") { "%02x".format(it) }
+        return MediaFingerprint(total, sha1)
+    }
+
+    /**
+     * Second streaming pass: OkHttp pulls directly from ContentResolver, so even
+     * multi-gigabyte picks use a constant 64 KiB memory buffer.
+     */
+    private class StreamingUriRequestBody(
+        private val context: Context,
+        private val uri: Uri,
         private val contentType: MediaType?,
+        private val contentLength: Long,
         private val onProgress: (Float) -> Unit
     ) : RequestBody() {
         override fun contentType(): MediaType? = contentType
-        override fun contentLength(): Long = bytes.size.toLong()
+        override fun contentLength(): Long = contentLength
 
         override fun writeTo(sink: BufferedSink) {
-            val chunkSize = 64 * 1024
-            var offset = 0
-            while (offset < bytes.size) {
-                val end = minOf(offset + chunkSize, bytes.size)
-                sink.write(bytes, offset, end - offset)
-                offset = end
-                onProgress(offset.toFloat() / bytes.size.toFloat())
+            val input = context.contentResolver.openInputStream(uri)
+                ?: throw IOException("تعذر قراءة الملف أثناء الرفع")
+            val buffer = ByteArray(64 * 1024)
+            var sent = 0L
+            input.use { stream ->
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read <= 0) break
+                    sink.write(buffer, 0, read)
+                    sent += read
+                    onProgress(sent.toFloat() / contentLength.toFloat())
+                }
+            }
+            if (sent != contentLength) {
+                throw IOException("تغير حجم الملف أثناء الرفع، أعد المحاولة")
             }
             onProgress(1f)
         }

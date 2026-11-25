@@ -725,11 +725,15 @@ class ClipsViewModel(
         visualStyle: MediaVisualStyle,
         mediaUriString: String?
     ) {
+        if (mediaUriString.isNullOrBlank()) {
+            _uiState.update { it.copy(feedbackMessage = "يرجى اختيار صورة أو فيديو للقصة") }
+            return
+        }
         val profile = _uiState.value.userProfile
         val newSlide = StorySlide(
             id = "sl_${UUID.randomUUID()}",
             caption = caption.trim().ifEmpty { "لقطة مؤقتة جديدة عبر clips ✨" },
-            visualStyle = if (mediaUriString != null) MediaVisualStyle.CUSTOM_URI else visualStyle,
+            visualStyle = MediaVisualStyle.CUSTOM_URI,
             mediaUriString = mediaUriString,
             timeAgo = "الآن",
             mediaInfo = initialMediaInfo(mediaUriString)
@@ -1402,6 +1406,10 @@ class ClipsViewModel(
         mediaUriString: String?,
         avatarOverlayId: String?
     ) {
+        if (contentType != UploadContentType.PHOTO_POST && mediaUriString.isNullOrBlank()) {
+            _uiState.update { it.copy(feedbackMessage = "يرجى اختيار ملف قبل النشر") }
+            return
+        }
         val context = appContext
         val localUri = mediaUriString
         val isVideo = contentType != UploadContentType.PHOTO_POST
@@ -1580,6 +1588,10 @@ class ClipsViewModel(
         mediaUriString: String?,
         fallbackStyle: MediaVisualStyle?
     ) {
+        if (isHorizontalVideo && mediaUriString.isNullOrBlank()) {
+            _uiState.update { it.copy(feedbackMessage = "يرجى اختيار فيديو أفقي قبل النشر") }
+            return
+        }
         val context = appContext
         val needsUpload = isHorizontalVideo && context != null && !mediaUriString.isNullOrBlank() &&
             SupabaseClient.isConfigured &&

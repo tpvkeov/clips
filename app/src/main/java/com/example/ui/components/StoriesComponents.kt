@@ -854,6 +854,7 @@ fun AddStoryBottomSheet(
 
             Button(
                 onClick = { onPublishStory(caption, selectedStyle, selectedUri) },
+                enabled = selectedUri != null,
                 colors = ButtonDefaults.buttonColors(containerColor = actionAccent),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

@@ -120,7 +120,6 @@ fun PostsScreen(
 ) {
     var showComposerSheet by remember { mutableStateOf(false) }
     var composerInitialVideoMode by remember { mutableStateOf(false) }
-    var composerInitialImagePick by remember { mutableStateOf(false) }
     var showSavedSheet by remember { mutableStateOf(false) }
     var savedTab by remember { mutableStateOf(0) }
     val postListState = rememberLazyListState()
@@ -230,17 +229,14 @@ fun PostsScreen(
                     onOpenOwnProfile = { onOpenCreatorProfile(userProfile.handle) },
                     onOpenTextComposer = {
                         composerInitialVideoMode = false
-                        composerInitialImagePick = false
                         showComposerSheet = true
                     },
                     onOpenPhotoComposer = {
                         composerInitialVideoMode = false
-                        composerInitialImagePick = true
                         showComposerSheet = true
                     },
                     onOpenHorizontalVideoComposer = {
                         composerInitialVideoMode = true
-                        composerInitialImagePick = false
                         showComposerSheet = true
                     }
                 )
@@ -268,7 +264,6 @@ fun PostsScreen(
             userProfile = userProfile,
             userAvatar = getAvatarPreset(userProfile.avatarPresetId),
             initialVideoMode = composerInitialVideoMode,
-            initialPhotoMode = composerInitialImagePick,
             onDismiss = { showComposerSheet = false },
             onPublish = { content, isVideo, videoTitle, uri, style ->
                 onPublishPost(content, isVideo, videoTitle, uri, style)
@@ -677,7 +672,6 @@ private fun CreatePostBottomSheet(
     userProfile: UserProfile,
     userAvatar: AvatarPreset,
     initialVideoMode: Boolean,
-    initialPhotoMode: Boolean,
     onDismiss: () -> Unit,
     onPublish: (
         content: String,
@@ -691,7 +685,6 @@ private fun CreatePostBottomSheet(
     var content by remember { mutableStateOf("") }
     var videoTitle by remember { mutableStateOf("") }
     var isHorizontalVideo by remember { mutableStateOf(initialVideoMode) }
-    var attachDemoVisual by remember { mutableStateOf(initialVideoMode || initialPhotoMode) }
     var selectedUri by remember { mutableStateOf<String?>(null) }
 
     val picker = rememberLauncherForActivityResult(
@@ -699,7 +692,6 @@ private fun CreatePostBottomSheet(
     ) { uri ->
         if (uri != null) {
             selectedUri = uri.toString()
-            attachDemoVisual = true
         }
     }
 
@@ -782,10 +774,7 @@ private fun CreatePostBottomSheet(
                     }
                     Switch(
                         checked = isHorizontalVideo,
-                        onCheckedChange = {
-                            isHorizontalVideo = it
-                            if (it) attachDemoVisual = true
-                        },
+                        onCheckedChange = { isHorizontalVideo = it },
                         modifier = Modifier.testTag("post_horizontal_video_switch")
                     )
                 }
@@ -823,17 +812,15 @@ private fun CreatePostBottomSheet(
                 }
 
                 OutlinedButton(
-                    onClick = {
-                        selectedUri = null
-                        attachDemoVisual = !attachDemoVisual
-                    },
+                    onClick = { selectedUri = null },
+                    enabled = selectedUri != null,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (attachDemoVisual && selectedUri == null) "إزالة المعاينة" else "مشهد استوديو جاهز")
+                    Text("إزالة المعاينة")
                 }
             }
 
-            if (attachDemoVisual || selectedUri != null) {
+            if (selectedUri != null) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
@@ -842,7 +829,7 @@ private fun CreatePostBottomSheet(
                         .clip(RoundedCornerShape(16.dp))
                 ) {
                     MediaSceneArtwork(
-                        visualStyle = if (isHorizontalVideo) MediaVisualStyle.TECH_WAVE else MediaVisualStyle.STUDIO_PHOTO,
+                        visualStyle = MediaVisualStyle.CUSTOM_URI,
                         mediaUriString = selectedUri,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -854,15 +841,14 @@ private fun CreatePostBottomSheet(
                 ?: MaterialTheme.colorScheme.primary
             Button(
                 onClick = {
-                    val fallbackStyle = when {
-                        selectedUri != null -> MediaVisualStyle.CUSTOM_URI
-                        isHorizontalVideo -> MediaVisualStyle.TECH_WAVE
-                        attachDemoVisual -> MediaVisualStyle.STUDIO_PHOTO
-                        else -> null
-                    }
+                    val fallbackStyle = if (selectedUri != null) MediaVisualStyle.CUSTOM_URI else null
                     onPublish(content, isHorizontalVideo, videoTitle, selectedUri, fallbackStyle)
                 },
-                enabled = content.isNotBlank() || attachDemoVisual || selectedUri != null,
+                enabled = if (isHorizontalVideo) {
+                    selectedUri != null
+                } else {
+                    content.isNotBlank() || selectedUri != null
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = publishBtnColor),
                 shape = RoundedCornerShape(18.dp),
                 modifier = Modifier

@@ -182,6 +182,8 @@ fun ProCameraStudioDialog(
     // Camera hardware state
     var boundCamera by remember { mutableStateOf<Camera?>(null) }
     var boundPreviewView by remember { mutableStateOf<PreviewView?>(null) }
+    var captureUseCaseReady by remember { mutableStateOf(false) }
+    var cameraStatusMessage by remember { mutableStateOf<String?>(null) }
     var minZoomRatio by remember { mutableFloatStateOf(1f) }
     var maxZoomRatio by remember { mutableFloatStateOf(4f) }
     var zoomRatio by remember { mutableFloatStateOf(1f) }
@@ -191,6 +193,10 @@ fun ProCameraStudioDialog(
     var exposureStepEv by remember { mutableFloatStateOf(0.5f) }
     var exposureIndex by remember { mutableIntStateOf(0) }
     var softExposureFraction by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(lensFacing, aspectRatio, captureMode) {
+        cameraStatusMessage = null
+    }
 
     // Recording & photo capture state
     var isRecording by remember { mutableStateOf(false) }
@@ -403,7 +409,10 @@ fun ProCameraStudioDialog(
                             videoCapture = videoCapture,
                             imageCapture = imageCapture,
                             lifecycleOwner = lifecycleOwner,
-                            onCameraBound = { cam -> boundCamera = cam },
+                            onCameraBound = { cam, ready ->
+                                boundCamera = cam
+                                captureUseCaseReady = ready
+                            },
                             onPreviewViewReady = { pv -> boundPreviewView = pv },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -1016,42 +1025,60 @@ fun ProCameraStudioDialog(
                                     return@clickable
                                 }
                                 if (captureMode == ProCaptureMode.PHOTO) {
+                                    if (boundCamera == null || !captureUseCaseReady) {
+                                        cameraStatusMessage = "الكاميرا غير جاهزة بعد، انتظر لحظة ثم حاول"
+                                        return@clickable
+                                    }
                                     isTakingPhoto = true
+                                    cameraStatusMessage = null
                                     showShutterFlash = true
                                     val photoFile = File(
                                         context.cacheDir,
                                         "clips_photo_${System.currentTimeMillis()}.jpg"
                                     )
                                     val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                                    imageCapture.takePicture(
-                                        outputOptions,
-                                        ContextCompat.getMainExecutor(context),
-                                        object : ImageCapture.OnImageSavedCallback {
-                                            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                                                isTakingPhoto = false
-                                                val savedUri = outputFileResults.savedUri
-                                                val finalUri = if (savedUri != null && savedUri != Uri.EMPTY) {
-                                                    savedUri.toString()
-                                                } else if (photoFile.exists() && photoFile.length() > 0L) {
-                                                    Uri.fromFile(photoFile).toString()
-                                                } else {
-                                                    null
+                                    val started = runCatching {
+                                        imageCapture.takePicture(
+                                            outputOptions,
+                                            ContextCompat.getMainExecutor(context),
+                                            object : ImageCapture.OnImageSavedCallback {
+                                                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                                    isTakingPhoto = false
+                                                    val savedUri = outputFileResults.savedUri
+                                                    val finalUri = if (savedUri != null && savedUri != Uri.EMPTY) {
+                                                        savedUri.toString()
+                                                    } else if (photoFile.exists() && photoFile.length() > 0L) {
+                                                        Uri.fromFile(photoFile).toString()
+                                                    } else {
+                                                        null
+                                                    }
+                                                    if (finalUri == null) {
+                                                        cameraStatusMessage = "تعذر حفظ الصورة، حاول مرة أخرى"
+                                                    } else {
+                                                        onMediaCaptured(finalUri, true)
+                                                    }
                                                 }
-                                                onMediaCaptured(finalUri, true)
-                                            }
 
-                                            override fun onError(exception: ImageCaptureException) {
-                                                isTakingPhoto = false
-                                                onMediaCaptured(null, true)
+                                                override fun onError(exception: ImageCaptureException) {
+                                                    isTakingPhoto = false
+                                                    cameraStatusMessage = "تعذر التقاط الصورة، حاول مرة أخرى"
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
+                                    if (started.isFailure) {
+                                        isTakingPhoto = false
+                                        cameraStatusMessage = "تعذر التقاط الصورة، حاول مرة أخرى"
+                                    }
                                 } else {
                                     if (isRecording) {
                                         runCatching { activeRecording?.stop() }
                                         isRecording = false
                                         isPaused = false
-                                    } else if (hasCameraPermission) {
+                                    } else if (boundCamera == null || !captureUseCaseReady) {
+                                        cameraStatusMessage = "الكاميرا غير جاهزة بعد، انتظر لحظة ثم حاول"
+                                    } else {
+                                        cameraStatusMessage = null
                                         val videoFile = File(
                                             context.cacheDir,
                                             "clips_video_${System.currentTimeMillis()}.mp4"
@@ -1087,7 +1114,7 @@ fun ProCameraStudioDialog(
                                                             }
                                                             onMediaCaptured(finalUri, false)
                                                         } else {
-                                                            onMediaCaptured(null, false)
+                                                            cameraStatusMessage = "تعذر حفظ الفيديو، حاول مرة أخرى"
                                                         }
                                                     }
                                                 }
@@ -1095,10 +1122,10 @@ fun ProCameraStudioDialog(
                                             isRecording = true
                                         }
                                         if (started.isFailure) {
-                                            onMediaCaptured(null, false)
+                                            isRecording = false
+                                            activeRecording = null
+                                            cameraStatusMessage = "تعذر بدء التصوير، حاول مرة أخرى"
                                         }
-                                    } else {
-                                        onMediaCaptured(null, false)
                                     }
                                 }
                             },
@@ -1127,13 +1154,17 @@ fun ProCameraStudioDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = when {
+                    text = cameraStatusMessage ?: when {
                         isRecording && isPaused -> "متوقف مؤقتاً • اضغط استئناف أو إنهاء"
                         isRecording -> "جاري التصوير • يمكنك الإيقاف المؤقت أو الحفظ"
                         captureMode == ProCaptureMode.PHOTO -> "اضغط لالتقاط صورة واضحة بالألوان المختارة"
                         else -> "اضغط لتصوير فيديو طبيعي متناسق"
                     },
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = if (cameraStatusMessage != null) {
+                        Color(0xFFFCA5A5)
+                    } else {
+                        Color.White.copy(alpha = 0.85f)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium
                 )
@@ -1181,7 +1212,7 @@ private fun ProCameraXPreviewBox(
     videoCapture: VideoCapture<Recorder>,
     imageCapture: ImageCapture,
     lifecycleOwner: LifecycleOwner,
-    onCameraBound: (Camera?) -> Unit,
+    onCameraBound: (Camera?, Boolean) -> Unit,
     onPreviewViewReady: (PreviewView) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1227,13 +1258,14 @@ private fun ProCameraXPreviewBox(
                 cameraProvider?.unbindAll()
 
                 val activeUseCase = if (captureMode == ProCaptureMode.VIDEO) videoCapture else imageCapture
+                var captureReady = false
                 val bound = runCatching {
                     cameraProvider?.bindToLifecycle(
                         lifecycleOwner,
                         selector,
                         preview,
                         activeUseCase
-                    )
+                    ).also { if (it != null) captureReady = true }
                 }.getOrElse {
                     // Fallback to preview-only if device/emulator camera lacks VideoCapture/ImageCapture profile
                     cameraProvider?.unbindAll()
@@ -1245,12 +1277,12 @@ private fun ProCameraXPreviewBox(
                         )
                     }.getOrNull()
                 }
-                onCameraBound(bound)
+                onCameraBound(bound, captureReady)
             }
         }, executor)
 
         onDispose {
-            onCameraBound(null)
+            onCameraBound(null, false)
             runCatching { cameraProvider?.unbindAll() }
         }
     }
