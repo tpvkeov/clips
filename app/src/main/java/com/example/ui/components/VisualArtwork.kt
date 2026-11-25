@@ -613,7 +613,7 @@ fun MediaSceneArtwork(
                                                 val surf = Surface(surfaceTexture)
                                                 attachedSurface = surf
                                                 val loadControl = DefaultLoadControl.Builder()
-                                                    .setBufferDurationsMs(1_500, 6_000, 1_000, 2_000)
+                                                    .setBufferDurationsMs(10_000, 30_000, 1_500, 3_000)
                                                     .build()
                                                 val player = ExoPlayer.Builder(ctx)
                                                     .setMediaSourceFactory(

@@ -36,41 +36,19 @@ class VideoProcessingService(private val context: Context) {
             // H.264/yuv420p is hardware-decoded on real phones; the old mpeg4
             // output often fell back to software decoding and stuttered in reels.
             // 30fps + faststart keeps the file light and playback smooth.
-            val h264Command = arrayOf(
-                "-y",
-                "-i", sourceFile.absolutePath,
-                "-vf", "scale=w='trunc(min(720,iw)/2)*2':h=-2,fps=30",
-                "-c:v", "libx264",
-                "-preset", "veryfast",
-                "-crf", "23",
-                "-profile:v", "main",
-                "-level", "3.1",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
-                "-b:a", "96k",
-                "-ac", "2",
-                "-movflags", "+faststart",
-                compressedFile.absolutePath
-            )
-            var compressSession = FFmpegKit.executeWithArguments(h264Command)
-            if (compressSession.returnCode?.isValueSuccess != true || !compressedFile.exists() || compressedFile.length() == 0L) {
-                // Some FFmpegKit builds omit libx264. Keep a working fallback so
-                // uploads never fail just because of the encoder flavour.
-                runCatching { compressedFile.delete() }
-                compressSession = FFmpegKit.executeWithArguments(
-                    arrayOf(
-                        "-y",
-                        "-i", sourceFile.absolutePath,
-                        "-vf", "scale=w='trunc(min(720,iw)/2)*2':h=-2,fps=30",
-                        "-c:v", "mpeg4",
-                        "-q:v", "6",
-                        "-c:a", "aac",
-                        "-b:a", "96k",
-                        "-movflags", "+faststart",
-                        compressedFile.absolutePath
-                    )
+            var compressSession = FFmpegKit.executeWithArguments(
+                arrayOf(
+                    "-y",
+                    "-i", sourceFile.absolutePath,
+                    "-vf", "scale=w='trunc(min(720,iw)/2)*2':h=-2,fps=30",
+                    "-c:v", "mpeg4",
+                    "-q:v", "6",
+                    "-c:a", "aac",
+                    "-b:a", "96k",
+                    "-movflags", "+faststart",
+                    compressedFile.absolutePath
                 )
-            }
+            )
             if (compressSession.returnCode?.isValueSuccess != true || !compressedFile.exists() || compressedFile.length() == 0L) {
                 return@withContext null
             }
